@@ -754,13 +754,59 @@ A005  Bolso                       2,2        ,21*/
 /*d) Construya un procedimiento similar al del apartado c donde el usuario
 introduzca como parámetro el código del artículo que desee modificar su
 precio.*/
+create or replace procedure actualiza_precio(cod Tabla_Articulos.codigo%type)
+as 
+    v_precio Tabla_Articulos.precio%type;
+begin 
+    select precio into v_precio from Tabla_Articulos 
+        where codigo = cod;
+    
+    if v_precio < 1 then 
+        update Tabla_Articulos set precio = precio + 0.25 
+            where codigo = cod;
+    elsif v_precio > 1 and v_precio < 10 then 
+        update Tabla_Articulos set precio = precio * 1.10
+            where codigo = cod;
+    elsif v_precio > 10 then 
+        update Tabla_Articulos set precio = precio * 1.20
+            where codigo = cod;
+    else 
+        update Tabla_Articulos set precio = 0
+            where codigo = cod;
+    end if;
+end;
 
+execute actualiza_precio('A004');
 
 ----------------------------------------------------------------------------------
+
+/*20. Crear un procedimiento que en la tabla emp incremente el salario el 3% a
+los empleados que tengan una comisión superior al 5% del salario.*/
+create or replace procedure incrementa_salario
+as 
+begin 
+    update emple set salario = salario * 1.03
+        where salario * 0.05 < nvl(comision, 0);
+end;
+
+execute incrementa_salario;
+
 ----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
+
+/*21. Crear un procedimiento que inserte un empleado en la tabla EMP. Su número
+será superior a los existentes y la fecha de incorporación a la empresa será la
+actual.*/
+create or replace procedure inserta_emple
+as 
+    v_emp_no emple.emp_no%type;
+begin
+    select max(emp_no) into v_emp_no from emple;
+
+    insert into emple (emp_no, apellido, fecha_alt, dept_no)
+        values(v_emp_no + 1, 'TENA', sysdate, 10);
+end;
+
+execute inserta_emple;
+--Número de departamento insertado porque en la tabla emple no puede ser null.
+
 ----------------------------------------------------------------------------------
