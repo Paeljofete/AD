@@ -951,3 +951,800 @@ VER_PRECIO                                                                      
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
+
+--BOLETÍN 1.- PL/SQL
+
+/*1. Crear un procedimiento que reciba como parámetro un código de empleado y nos muestre por
+pantalla el apellido, salario y nombre del departamento donde trabaja, si existe un empleado con
+dicho código. En caso contrario, un mensaje de error que indique que el empleado con ese código
+no existe. Haz uso de la Excepcion 'NO_DATA_FOUND'.*/
+create or replace procedure buscar_emple (cod_emple emple.emp_no%type)
+as 
+    v_apellido emple.apellido%type;
+    v_salario emple.salario%type;
+    v_nomdep depart.dnombre%type;
+begin 
+    select apellido, salario, dnombre into v_apellido, v_salario, v_nomdep from emple, depart 
+        where emple.dept_no = depart.dept_no
+        and cod_emple = emp_no;
+    
+    dbms_output.put_line('Encontrado: ' || v_apellido || ' - ' || v_salario || ' - ' || v_nomdep || '.');
+exception 
+    when no_data_found then 
+        dbms_output.put_line('No existe el número de empleado indicado.');
+end;
+
+execute buscar_emple(7782);
+/*Encontrado: CEREZO - 2885 - CONTABILIDAD.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute buscar_emple(7782);
+/*No existe el número de empleado indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*2. Modifica los ejercicios complementarios 10 y 11 para que den un mensaje de error en caso de
+que el empleado (ejercicio 10) ó el departamento (ejercicio 11) no existan. Haz uso de la Excepcion
+'NO_DATA_FOUND'.*/
+
+    /*10. Codifica un procedimiento que permita borrar un empleado cuyo número se pasará en la llamada.
+    create or replace procedure borra_emple(num_empleado emple.emp_no%type)
+    as 
+    begin 
+        delete from emple where emp_no = num_empleado;
+    end;
+
+    execute borra_emple(7782);
+    Procedimiento PL/SQL terminado correctamente.*/
+create or replace procedure borra_emple(num_empleado emple.emp_no%type)
+as    
+    v_emp_no emple.emp_no%type;
+begin 
+    select emp_no into v_emp_no from emple 
+        where emp_no = num_empleado;
+
+    delete from emple where emp_no = num_empleado;
+exception 
+    when no_data_found then
+        dbms_output.put_line('No existe el número de empleado indicado.');
+end;
+
+execute borra_emple(7782);
+/*Procedimiento PL/SQL terminado correctamente.*/
+
+execute borra_emple(100);
+/*No existe el número de empleado indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+    /*11. Escribe un procedimiento que modifique la localidad de un departamento. El procedimiento recibirá como
+    parámetros el número del departamento y la nueva localidad.
+    create or replace procedure modificar_loc(
+        num_depar depart.dept_no%type,
+        nueva_loc depart.loc%type)
+    as 
+    begin   
+        update depart set loc = nueva_loc
+            where dept_no = num_depar;
+    end;
+
+    execute modificar_loc(20, 'MURCIA');
+    Procedimiento PL/SQL terminado correctamente.*/
+create or replace procedure modificar_loc(
+        num_depar depart.dept_no%type,
+        nueva_loc depart.loc%type)
+as 
+    v_depart depart.dept_no%type;
+begin   
+    select dept_no into v_depart from depart 
+        where dept_no = num_depar;
+
+    update depart set loc = nueva_loc
+        where dept_no = num_depar;
+exception 
+    when no_data_found then
+        dbms_output.put_line('No existe el número de departamento indicado.');
+end;
+
+execute modificar_loc(20, 'MURCIA');
+/*Procedimiento PL/SQL terminado correctamente.*/
+
+execute modificar_loc(60, 'MURCIA');
+/*No existe el número de departamento indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*3. Modifica los ejercicios complementarios 10 y 11 para que den un mensaje de error en caso de
+que el empleado (ejercicio 10) ó el departamento (ejercicio 11) no existan. Haz uso del atributo
+'SQL%ROWCOUNT'.*/
+create or replace procedure borra_emple(num_empleado emple.emp_no%type)
+as
+begin
+	delete from emple where emp_no = num_empleado;
+
+	if sql%rowcount > 0 then
+		dbms_output.put_line('Se ha borrado el empleado.');
+	else
+		dbms_output.put_line('No existe el número de empleado indicado.');
+	end if;
+end;
+
+execute borra_emple(7782);
+/*Se ha borrado el empleado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute borra_emple(100);
+/*No existe el número de empleado indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+create or replace procedure modificar_loc(
+        num_depar depart.dept_no%type,
+        nueva_loc depart.loc%type)
+as 
+begin   
+    update depart set loc = nueva_loc
+        where dept_no = num_depar;
+
+    if sql%rowcount > 0 then 
+       	dbms_output.put_line('Se ha modificado el departamento.');
+	else
+		dbms_output.put_line('No existe el número de departamento indicado.');
+	end if; 
+end;
+
+execute modificar_loc(20, 'MURCIA');
+/*Se ha modificado el departamento.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute modificar_loc(60, 'MURCIA');
+/*No existe el número de departamento indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*4. Modifica el ejercicio propuesto 3 del tema para que muestre mensajes de error diferentes en caso
+de que el empleado o el departamento no existan. Haz uso de bloques anidados y de la Excepción
+'NO_DATA_FOUND'.*/
+
+    /*Escribe un procedimiento con funcionalidad similar al ejemplo anterior,
+    que recibirá un número de empleado y un número de departamento y
+    asignará al empleado el departamento indicado en el segundo parámetro.
+    create or replace procedure cambiar_depart(
+        num_empleado emple.emp_no%type,
+        num_depart emple.dept_no%type)
+    as 
+        v_depart_anterior emple.dept_no%type;
+    begin 
+        select dept_no into v_depart_anterior from emple 
+            where emp_no = num_empleado;
+        
+        update emple set dept_no = num_depart 
+            where emp_no = num_empleado;
+        
+        dbms_output.put_line(num_empleado || '. Departamento anterior: ' || v_depart_anterior || ' - nuevo departamento: ' || num_depart || '.');
+    end;
+
+    execute cambiar_depart(7782, 40);
+    7782. Departamento anterior: 10 - nuevo departamento: 40.
+    Procedimiento PL/SQL terminado correctamente.*/
+create or replace procedure cambiar_depart(
+    num_empleado emple.emp_no%type,
+    num_depart emple.dept_no%type)
+as 
+    v_depart_anterior emple.dept_no%type;
+    v_emp_anterior emple.emp_no%type;
+begin 
+    begin 
+        select emp_no into v_emp_anterior from emple
+			where emp_no = num_empleado;
+    exception 
+        when no_data_found then
+            dbms_output.put_line('No existe el número de empleado indicado.');
+    end;
+
+    select dept_no into v_depart_anterior from depart 
+        where dept_no = num_depart;
+
+    update emple set dept_no = num_depart 
+        where emp_no = num_empleado;
+
+    if sql%rowcount > 0 then 
+        dbms_output.put_line(num_empleado || '. Departamento anterior: ' || v_depart_anterior || ' - nuevo departamento: ' || num_depart || '.');
+    end if;
+exception 
+    when no_data_found then
+        dbms_output.put_line('No existe el número de departamento indicado.');  
+end;
+
+execute cambiar_depart(7782, 40);
+/*7782. Departamento anterior: 40 - nuevo departamento: 40.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute cambiar_depart(100, 40);
+/*No existe el número de empleado indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute cambiar_depart(7782, 60);
+/*No existe el número de departamento indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*5. Realiza un procedimiento que consiga la misma salida que el ejercicio anterior haciendo uso de
+un solo bloque y de una variable bandera.*/
+create or replace procedure cambiar_depart(
+    num_empleado emple.emp_no%type,
+    num_depart emple.dept_no%type)
+as 
+    v_depart_anterior emple.dept_no%type;
+    v_emp_anterior emple.emp_no%type;
+    v_bandera boolean default false;
+begin 
+    select emp_no into v_emp_anterior from emple
+		where emp_no = num_empleado;
+
+    if sql%rowcount > 0 then 
+        v_bandera := true;
+    end if;
+
+    select dept_no into v_depart_anterior from depart 
+        where dept_no = num_depart;
+    
+    if sql%rowcount > 0 then 
+        v_bandera := true;
+    end if;
+
+    update emple set dept_no = num_depart 
+        where emp_no = num_empleado;
+
+    dbms_output.put_line(num_empleado || '. Departamento anterior: ' || v_depart_anterior || ' - nuevo departamento: ' || num_depart || '.');
+exception 
+    when no_data_found then 
+        if v_bandera = false then 
+            dbms_output.put_line('No existe el número de empleado indicado.'); 
+        else 
+        dbms_output.put_line('No existe el número de departamento indicado.'); 
+        end if;
+end;
+
+execute cambiar_depart (7782, 40);
+/*7782. Departamento anterior: 40 - nuevo departamento: 40.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute cambiar_depart (100, 40);
+/*No existe el número de empleado indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute cambiar_depart (7782, 60);
+/*No existe el número de departamento indicado.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*6. Realiza un procedimiento que consiga la misma salida que el ejercicio 4 haciendo uso de dos
+funciones: busca_empleado y busca_departamento que devolverán -1 en caso de que no exista el
+dato.*/
+create or replace function busca_empleado (codigo number)
+return number
+as
+	v_codEmple number(4);
+begin
+	select emp_no into v_codEmple from emple 
+		where emp_no = codigo;
+	
+	dbms_output.put_line('Empleado: ' || v_codEmple);
+	return v_codEmple;
+exception 
+	when no_data_found then		
+		dbms_output.put_line('Empleado no reconocido.');
+		return -1;	
+end busca_empleado;
+
+begin dbms_output.put_line(busca_empleado(10)); 
+end;
+/*Empleado no reconocido.
+-1*/
+
+begin dbms_output.put_line(busca_empleado(7782)); 
+end;
+/*Empleado: 7782
+7782*/
+
+create or replace function buscar_departamento(departamento number)
+return number
+as
+	v_codDepart number(4);
+begin
+	select dept_no into v_codDepart from depart 
+		where dept_no = departamento;
+		
+		dbms_output.put_line('Departamento: ' || v_codDepart);
+		return v_codDepart;
+exception 
+	when no_data_found then 
+		dbms_output.put_line('Departamento no reconocido.');
+		return -1;
+end buscar_departamento;
+
+begin dbms_output.put_line (buscar_departamento (60));
+end;
+/*Departamento no reconocido.
+-1*/
+
+begin dbms_output.put_line (buscar_departamento (30));
+end;
+/*Departamento: 30
+30*/
+
+create or replace procedure cambiar_depart(
+	num_empleado number,
+	v_nuevo_depart number)
+as 
+	v_codEmple number;
+	v_codDepart number;
+begin 
+	v_codEmple := busca_empleado(num_empleado);
+	v_codDepart := buscar_departamento(v_nuevo_depart);
+	
+	update emple set dept_no = v_nuevo_depart
+	where emp_no = num_empleado;
+end;
+	
+execute cambiar_depart(7782, 40);
+/*Empleado: 7782
+Departamento: 40*/
+
+execute cambiar_depart(100, 40);
+/*Empleado no reconocido.
+Departamento: 40*/
+
+execute cambiar_depart(7782, 60);
+/*Empleado: 7782
+Departamento no reconocido.*/
+
+execute cambiar_depart(100, 60);
+/*Empleado no reconocido.
+Departamento no reconocido.*/
+
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+
+--BOLETÍN 2.- PL/SQL
+
+/*1. Crear una función que dado un producto devuelva el total de unidades vendidas de dicho
+producto. En caso de que no tenga ventas devolverá 0. En caso de que el producto no exista,
+devolverá -1.*/
+create or replace function unidadVendid(producto number)
+return number 
+as 
+    v_unidades number;
+begin 
+    begin 
+        select cod_producto into v_unidades from productos 
+            where cod_producto = producto;
+        
+        select nvl(sum(unidades), 0) into v_unidades from ventas
+            where cod_producto = producto;
+    exception 
+        when no_data_found then 
+            return -1;
+    end;
+return v_unidades;
+end;
+
+select unidadVendid(1) from dual;
+/*UNIDADVENDID(1)
+---------------
+              0*/
+
+select unidadVendid(6) from dual;
+/*UNIDADVENDID(6)
+---------------
+             12*/
+
+select unidadVendid(10) from dual;
+/*
+UNIDADVENDID(10)
+----------------
+              -1*/
+
+----------------------------------------------------------------------------------
+
+/*2. Crea un procedimiento que haga lo mismo que la función anterior. El procedimiento tendrá un
+argumento de entrada (p_producto) y otro de salida (p_total).*/
+create or replace procedure unidadVendid(
+    p_producto number,
+    p_total out number)
+as 
+begin 
+    begin 
+        select cod_producto into p_total from productos 
+            where cod_producto = p_producto;
+        
+        select nvl(sum(unidades), 0) into p_total from ventas 
+            where cod_producto = p_producto;
+    exception 
+        when no_data_found then 
+            p_total := -1;
+    end;
+end;
+
+declare 
+	p_producto number := 6;
+	p_total number default 0;
+begin
+	unidadVendid(p_producto, p_total);  	
+	dbms_output.put_line (p_total);
+end;
+/*12
+Procedimiento PL/SQL terminado correctamente.*/
+
+declare 
+	p_producto number := 1;
+	p_total number default 0;
+begin
+	unidadVendid(p_producto, p_total);  	
+	dbms_output.put_line (p_total);
+end;	
+/*0
+Procedimiento PL/SQL terminado correctamente.*/
+
+declare 
+	p_producto number := 10;
+	p_total number default 0;
+begin
+	unidadVendid(p_producto, p_total);  	
+	dbms_output.put_line (p_total);
+end;
+/*-1
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*4. Crear un procedimiento que reciba un NIF y una fecha y muestre el nombre del cliente al que se
+le hizo la venta, la descripción del producto y las unidades vendidas. Dar los mensajes oportunos en
+caso de que el cliente no exista o no tenga ventas ese día.*/
+create or replace procedure inforVentaCliente(
+    p_nif varchar2,
+    p_fecha ventas.fecha%type)
+as 
+    v_nombre clientes.nombre%type;
+    v_descrip productos.descripcion%type;
+    v_unidades ventas.unidades%type;
+    v_bandera number default 0;
+begin 
+    select nombre into v_nombre from clientes 
+        where nif = p_nif;
+
+    v_bandera := 1;
+
+    select nombre, descripcion, unidades into v_nombre, v_descrip, v_unidades from clientes c, productos p, ventas v 
+        where c.nif = p_nif
+        and v.fecha = p_fecha
+        and c.nif = v.nif 
+        and v.cod_producto = p.cod_producto;
+
+	dbms_output.put_line(p_fecha || ': ' || v_nombre || ' - ' || v_descrip || ' - ' || v_unidades || '.');
+exception 
+	when no_data_found then 
+		if v_bandera = 0 then 
+			dbms_output.put_line('No existe el cliente.');
+		else 
+			dbms_output.put_line('No hay ventas ese día de dicho producto.');
+		end if;
+end;
+
+execute inforVentaCliente('111A', '22/09/97');
+/*No hay ventas ese día de dicho producto.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute inforVentaCliente('999J', '22/09/97');
+/*No existe el cliente.
+Procedimiento PL/SQL terminado correctamente.*/
+
+execute inforVentaCliente('111A', '18/10/97');
+/*18/10/97: ANDRES - SIMM EDO 16MB - 3.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*4. Crear una función que reciba un NIF y devuelva la cantidad de ventas que dicho cliente ha
+realizado. Si el cliente no ha hecho ninguna venta devolverá 0. Si el cliente no existe devolverá -1.*/
+create or replace function compraCliente(p_nif clientes.nif%type)
+return number
+as 
+    v_nif clientes.nif%type;
+    v_unidades ventas.unidades%type;
+begin 
+    select nif into v_nif from clientes 
+        where nif = p_nif;
+
+    select count(*) into v_unidades from ventas 
+        where nif = p_nif;
+
+    return v_unidades;
+exception   
+    when no_data_found then 
+        return -1;
+end;
+
+select compraCliente('111A') from dual;
+/*COMPRACLIENTE('111A')
+---------------------
+                    2*/
+
+select compraCliente('999I') from dual;
+/*COMPRACLIENTE('999I')
+---------------------
+                    0*/
+
+select compraCliente('999W') from dual;
+/*COMPRACLIENTE('999W')
+---------------------
+                   -1*/
+
+----------------------------------------------------------------------------------
+
+/*5. Crear una función que reciba un nombre de cliente y devuelva la cantidad de ventas que dicho
+cliente ha realizado. Utiliza una llamada a la función anterior. Si el cliente no existe devolverá -1.*/
+create or replace function compraCliente2(p_nombre clientes.nombre%type)
+return number 
+as 
+	v_nif clientes.nif%type;
+	v_unidades ventas.unidades%type;
+begin 
+	select nif into v_nif from clientes
+		where nombre = p_nombre;
+	
+	v_unidades := compraCliente(v_nif);
+	
+	return v_unidades;
+exception 
+	when no_data_found then 
+		return -1;
+end;
+
+select compraCliente2('SANDRA') from dual;
+/*COMPRACLIENTE2('SANDRA')
+------------------------
+                       4*/
+
+select compraCliente2('ANTONIO') from dual;
+/*COMPRACLIENTE2('ANTONIO')
+-------------------------
+                        0*/
+
+select compraCliente2('BEREN') from dual;
+/*
+COMPRACLIENTE2('BEREN')
+-----------------------
+                     -1*/
+
+----------------------------------------------------------------------------------
+
+--BOLETÍN 3.- PL/SQL
+
+/*1. Crear una función que devuelva la diferencia de precio entre el producto más caro y el más
+barato.*/
+create or replace function difPrecios
+return number
+as 
+	v_diferencia number;
+begin 
+	select max(precio_uni) - min(precio_uni) into v_diferencia from productos;
+	
+	return v_diferencia;
+end;
+		
+select difPrecios from dual;
+/*DIFPRECIOS
+----------
+     42900*/
+
+----------------------------------------------------------------------------------
+
+/*2. Crear un procedimiento que muestre los datos del cliente con domicilio en Las Rozas que
+todavía no ha realizado ninguna compra.*/
+create or replace procedure domicilio
+as 
+	v_cliente clientes%rowtype;
+begin 
+	select * into v_cliente from clientes
+		where domicilio like 'LAS ROZAS'
+		and not exists (select nif from ventas	
+						where clientes.nif = ventas.nif);
+						
+	dbms_output.put_line(v_cliente.nombre || ' ' || v_cliente.nif || ' ' || v_cliente.domicilio || '.');
+end;
+
+execute domicilio;
+/*ANTONIO 999I LAS ROZAS.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*3. Crear un procedimiento que dado un producto (cod_producto) inserte una venta de 10 unidades
+con fecha de hoy para todos los clientes. Dar un mensaje de error apropiado en caso de que no
+exista el producto.*/
+create or replace procedure insertarVentas(p_producto number)
+as
+    v_producto productos.cod_producto%type;
+begin
+    select cod_producto into v_producto from productos
+        where cod_producto = p_producto;
+	
+	insert into ventas
+		select distinct nif, p_producto, sysdate, 10 from clientes;
+exception
+    when no_data_found then
+        dbms_output.put_line('El producto no existe.');
+end;
+	 
+execute insertarVentas(2);
+/*NIF        COD_PRODUCTO FECHA      UNIDADES
+---------- ------------ -------- ----------
+333C                  2 22/09/97          2
+888H                  4 22/09/97          1
+555E                  6 23/09/97          3
+222B                  5 26/09/97          5
+111A                  9 28/09/97          3
+222B                  4 28/09/97          1
+444D                  6 02/10/97          2
+555E                  6 02/10/97          1
+888H                  2 04/10/97          4
+333C                  9 04/10/97          4
+222B                  6 05/10/97          2
+666F                  7 07/10/97          1
+555E                  4 10/10/97          3
+222B                  4 16/10/97          2
+111A                  3 18/10/97          3
+222B                  4 18/10/97          5
+444D                  6 22/10/97          2
+555E                  6 02/11/97          2
+888H                  2 04/11/97          3
+333C                  9 04/12/97          3
+222B                  2 05/12/97          2
+111A                  2 06/04/22         10
+222B                  2 06/04/22         10
+333C                  2 06/04/22         10
+444D                  2 06/04/22         10
+555E                  2 06/04/22         10
+666F                  2 06/04/22         10
+777G                  2 06/04/22         10
+888H                  2 06/04/22         10
+999I                  2 06/04/22         10
+/*Procedimiento PL/SQL terminado correctamente.*/
+
+execute insertarVentas(12);
+/*El producto no existe.
+Procedimiento PL/SQL terminado correctamente.*/
+
+----------------------------------------------------------------------------------
+
+/*4. Crear un procedimiento que muestre los datos del producto con mayor número de ventas.*/
+create or replace procedure maxVentas
+as 
+	v_producto productos%rowtype;
+begin 
+	select * into v_producto from productos
+		where cod_producto in (select cod_producto from ventas	
+								group by cod_producto 
+								having count(*) = (select max(count(cod_producto)) from ventas			
+													group by cod_producto));
+													
+	dbms_output.put_line('Cod: ' || v_producto.cod_producto || '. Descrip: ' || v_producto.descripcion || '. Línea: ' || v_producto.linea_producto 
+		|| '. Precio:  ' || v_producto.precio_uni || '. Stock: ' || v_producto.stock);												
+end;
+
+execute maxVentas;
+/*Cod: 2. Descrip: PLACA BASE VX. Línea: PB. Precio:  10000. Stock: 0*/
+
+----------------------------------------------------------------------------------
+
+/*5. Crear una función que tenga como argumento el código de un empleado y devuelva la diferencia
+entre su salario y el máximo salario de su departamento. La función devolverá -1 si no existe ese
+empleado.*/
+create or replace function difSalario(num_emp emple.emp_no%type)
+return number 
+as 
+	v_emp_no emple.salario%type;
+	v_salario emple.salario%type;
+    v_dept_no emple.dept_no%type;
+begin 
+	select salario, dept_no into v_emp_no, v_dept_no from emple 
+		where emp_no = num_emp;
+	
+	select max(salario) into v_salario from emple 
+        where dept_no = v_dept_no;
+		
+	v_salario := v_salario - v_emp_no;
+		
+	return v_salario;
+exception 
+	when no_data_found then 
+		return -1;
+end;
+
+select * from emple 
+    order by dept_no, salario;
+
+/*  EMP_NO APELLIDO   OFICIO            DIR FECHA_AL    SALARIO   COMISION    DEPT_NO
+---------- ---------- ---------- ---------- -------- ---------- ---------- ----------
+      7934 MUÑOZ      EMPLEADO         7782 23/01/92       1690                    10
+      7839 REY        PRESIDENTE            17/11/91       4100                    10
+      7369 SANCHEZ    EMPLEADO         7902 17/12/90       1040                    20
+      7876 ALONSO     EMPLEADO         7788 23/09/91       1430                    20
+      7566 JIMENEZ    DIRECTOR         7839 02/04/91       2900                    20
+      7788 GIL        ANALISTA         7566 09/11/91       3000                    20
+      7902 FERNANDEZ  ANALISTA         7566 03/12/91       3000                    20
+      7900 JIMENO     EMPLEADO         7698 03/12/91       1335                    30
+      7844 TOVAR      VENDEDOR         7698 08/09/91       1350          0         30
+      7499 ARROYO     VENDEDOR         7698 20/02/90       1500        390         30
+      7654 MARTIN     VENDEDOR         7698 29/09/91       1600       1020         30
+      7521 SALA       VENDEDOR         7698 22/02/91       1625        650         30
+      7698 NEGRO      DIRECTOR         7839 01/05/91       3005                    30
+      7782 CEREZO     DIRECTOR         7839 09/06/91       2885                    40*/
+
+select difSalario('7369') from dual;
+/*DIFSALARIO('7369')
+------------------
+              1960*/
+
+select difSalario('7900') from dual;
+/*DIFSALARIO('7900')
+------------------
+              1670*/
+
+select difSalario('1000') from dual;
+/*DIFSALARIO('1000')
+------------------
+                -1*/
+
+----------------------------------------------------------------------------------	
+
+/*6. Crear un procedimiento que reciba un número n y calcule, en una variable de salida, el porcentaje
+que suponen estos n empleados respecto al total de empleados de la base de datos.*/
+create or replace procedure porcentajeTotal(n number, salida out number)
+as 
+	v_total_emple number;
+begin 
+	select count(*) into v_total_emple from emple;
+
+	salida := (n * 100) / v_total_emple;
+end;
+
+declare 
+	salida number(4,2);
+begin 
+	porcentajeTotal(8, salida);
+	dbms_output.put_line(salida || '%.'	);
+end;
+/*57,14%.
+Procedimiento PL/SQL terminado correctamente.*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
