@@ -17,7 +17,7 @@ begin
     open c1;
     
     fetch c1 into v_apellido, v_comision, v_salario;
-
+ 
     while c1%found loop 
         update emple set salario = salario * 1.1 
             where current of c1;
@@ -226,7 +226,7 @@ as
     v_resto number default 0;
 
     cursor c1 is 
-        select Num_Depart from Tabla_Empleado;
+        select Num_Depart from Tabla_Departamento;
 
     cursor c2 (v_dept_no Tabla_Empleado.Num_Depart%type) is 
         select categoría, salario from Tabla_Empleado
