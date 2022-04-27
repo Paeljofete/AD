@@ -156,26 +156,12 @@ select * from alumnosinf
 
 * Construya un procedimiento que pase los datos de la tabla emp a la tabla Tabla_Empleado, y los
 datos de la tabla dept a Tabla_Departamento (dejando a 0 los dos últimos campos).*/
+alter table Tabla_Empleado 
+disable constraint SYS_C001584;
 
-/*
- Nombre                                                                              ¿Nulo?   Tipo
- ----------------------------------------------------------------------------------- -------- --------------------------------------------------------
- EMP_NO                                                                              NOT NULL NUMBER(4)
- APELLIDO                                                                                     VARCHAR2(10)
- OFICIO                                                                                       VARCHAR2(10)
- DIR                                                                                          NUMBER(4)
- FECHA_ALT                                                                                    DATE
- SALARIO                                                                                      NUMBER(7)
- COMISION                                                                                     NUMBER(7)
- DEPT_NO                                                                             NOT NULL NUMBER(2)
+alter table Tabla_Empleado
+enable constraint SYS_C001584;
 
- 
- Nombre                                                                              ¿Nulo?   Tipo
- ----------------------------------------------------------------------------------- -------- --------------------------------------------------------
- DEPT_NO                                                                             NOT NULL NUMBER(2)
- DNOMBRE                                                                                      VARCHAR2(14)
- LOC                                                                                          VARCHAR2(14)
-*/
 create or replace procedure pasa_datos
 as 
     cursor c1 is    
@@ -226,28 +212,91 @@ select * from Tabla_Empleado;
         7902 FERNANDEZ                 ANALISTA         7566 03/12/81     390000                    20
         7934 MUÑOZ                     EMPLEADO         7782 23/01/82     169000                    10*/
 
-/*
-* Construya un procedimiento que calcule el presupuesto del departamento para el año próximo. Se
+/* Construya un procedimiento que calcule el presupuesto del departamento para el año próximo. Se
 almacenará el mismo en la tabla Tabla_Departamento en la columna Presupuesto. Hay que tener en
 cuenta las siguientes subidas de sueldo:
-    Gerente + 20%
-    Comercial + 15%
+    Director + 20%
+    Vendedor + 15%
     Los demás empleados que no estén en ninguna de las categorías anteriores se les subirá el sueldo un
-    10%.
+    10%.*/
+create or replace procedure presupuesto_proximo
+as 
+    v_director number default 0;
+    v_vendedor number default 0;
+    v_resto number default 0;
 
-* Construya un procedimiento que actualice el campo Total_Salarios y el campo Media_Salarios de
+    cursor c1 is 
+        select Num_Depart from Tabla_Empleado;
+
+    cursor c2 (v_dept_no Tabla_Empleado.Num_Depart%type) is 
+        select categoría, salario from Tabla_Empleado
+            where Num_Depart = v_dept_no;
+begin 
+    for v1 in c1 loop 
+        v_director := 0;
+        v_vendedor := 0;
+        v_resto := 0;
+
+            for v2 in c2(v1.Num_Depart) loop 
+                if v2.categoría = 'DIRECTOR' then 
+                    v_director := v2.salario + v2.salario * 1.2;
+                elsif v2.categoría = 'VENDEDOR' then 
+                    v_vendedor := v2.salario + v2.salario * 1.15;
+                else 
+                    v_resto := v2.salario + v2.salario * 1.1;
+                end if;
+
+                update Tabla_Departamento set presupuesto = v_director + v_vendedor + v_resto
+                    where Num_Depart = v1.Num_Depart;
+            end loop;
+    end loop;
+end;
+
+execute presupuesto_proximo;
+
+select * from Tabla_Departamento;
+/*NUM_DEPART NOMBRE_DEPART   UBICACIÓN       PRESUPUESTO MEDIA_SALARIOS TOTAL_SALARIOS
+---------- --------------- --------------- ----------- -------------- --------------
+        10 CONTABILIDAD    SEVILLA             1055600              0              0
+        20 INVESTIGACION   MADRID              1669850              0              0
+        30 VENTAS          BARCELONA           1493700              0              0
+        40 PRODUCCION      BILBAO                    0              0              0*/
+
+/* Construya un procedimiento que actualice el campo Total_Salarios y el campo Media_Salarios de
 la tabla Tabla_Departamento, siendo el total la suma del salario de todos los empleados, igualmente
 con la media.
     Para ello:
     − Cree un cursor C1, que devuelva todos los departamentos
     − Cree un cursor C2, que devuelva el salario y el código de todos los empleados de su
     departamento.*/
+create or replace procedure total_media
+as 
+    cursor c1 is 
+        select Num_Depart from Tabla_Empleado;
 
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
+    cursor c2 (v_dept_no Tabla_Empleado.Num_Depart%type) is 
+        select sum(salario) sumaSalario, count(Num_Empleado) totalEmple from Tabla_Empleado
+            where Num_Depart = v_dept_no;
+begin 
+    for v1 in c1 loop 
+
+            for v2 in c2(v1.Num_Depart) loop 
+                update Tabla_Departamento set Total_Salarios = v2.sumaSalario
+                    where Num_Depart = v1.Num_Depart;
+
+                update Tabla_Departamento set Media_Salarios = v2.sumaSalario / v2.totalEmple
+                    where Num_Depart = v1.Num_Depart;
+            end loop;
+    end loop;
+end;
+
+execute total_media;
+
+select * from Tabla_Departamento;
+/*NUM_DEPART NOMBRE_DEPART   UBICACIÓN       PRESUPUESTO MEDIA_SALARIOS TOTAL_SALARIOS
+---------- --------------- --------------- ----------- -------------- --------------
+        10 CONTABILIDAD    SEVILLA             1055600      379166,67        1137500
+        20 INVESTIGACION   MADRID              1669850         282750        1413750
+        30 VENTAS          BARCELONA           1493700      203666,67        1222000
+        40 PRODUCCION      BILBAO                    0              0              0/
 ----------------------------------------------------------------------------------
