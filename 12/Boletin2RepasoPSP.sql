@@ -106,29 +106,143 @@ insert into alumnos
 
 create or replace procedure insertar_informatica
 as 
-    v_id alumnos.numMatricula%type;
-    v_nombre alumnos.nombre%type;
-    v_apellidos alumnos.apellidos%type;
-    v_precio alumnos.precio%type;
+    nombre_apellidos varchar2(20);
 
     cursor c1 is 
-        select numMatricula, nombre, apellidos, precio from alumnos 
+        select numMatricula, nombre || apellidos nombre_apellidos, precioMatricula from alumnos 
             where titulacion like 'Informatica';
 begin 
-    open c1;
-
-    fetch c1 into v_id, v_nombre, v_apellidos;
-
-    while c1%found loop 
-        select v_nombre || v_apellidos as nombre_apellidos from alumnos;
+    for v1 in c1 loop 
+        dbms_output.put_line(v1.nombre_apellidos);
     
         insert into AlumnosInf 
-            values(v_id, nombre_apellidos, v_precio);
+            values(v1.numMatricula, v1.nombre_apellidos, v1.precioMatricula);
+    end loop;
+end;
 
+execute insertar_informatica;
+/*José Jiménez
+Elena Martínez
+Procedimiento PL/SQL terminado correctamente.*/
 
-
+select * from alumnosinf
+/*IDMATRICULA NOMBRE_APELLIDOS                                     PRECIO
+----------- -------------------------------------------------- ----------
+          2 José Jiménez                                             1200
+          4 Elena Martínez                                           1200*/
 
 ----------------------------------------------------------------------------------
+
+/*3. Dadas las siguientes tablas:
+    CREATE TABLE Tabla_Departamento (
+    Num_Depart Number(2) PRIMARY KEY,
+    Nombre_Depart VARCHAR2(15),
+    Ubicación VARCHAR2(15),
+    Presupuesto NUMBER(10,2),
+    Media_Salarios NUMBER(10,2),
+    Total_Salarios NUMBER(10,2));
+
+    CREATE TABLE Tabla_Empleado(
+    Num_Empleado Number(4) PRIMARY KEY,
+    Nombre_Empleado VARCHAR(25),
+    Categoría VARCHAR(10), -- Gerente, Comercial, ...
+    Jefe Number(4),
+    Fecha_Contratacion DATE,
+    Salario Number(7),
+    Comision Number(7),
+    Num_Depart NUMBER(2),
+    FOREIGN KEY (Jefe) REFERENCES Tabla_Empleado,
+    FOREIGN KEY (Num_Depart) REFERENCES Tabla_Departamento);
+
+* Construya un procedimiento que pase los datos de la tabla emp a la tabla Tabla_Empleado, y los
+datos de la tabla dept a Tabla_Departamento (dejando a 0 los dos últimos campos).*/
+
+/*
+ Nombre                                                                              ¿Nulo?   Tipo
+ ----------------------------------------------------------------------------------- -------- --------------------------------------------------------
+ EMP_NO                                                                              NOT NULL NUMBER(4)
+ APELLIDO                                                                                     VARCHAR2(10)
+ OFICIO                                                                                       VARCHAR2(10)
+ DIR                                                                                          NUMBER(4)
+ FECHA_ALT                                                                                    DATE
+ SALARIO                                                                                      NUMBER(7)
+ COMISION                                                                                     NUMBER(7)
+ DEPT_NO                                                                             NOT NULL NUMBER(2)
+
+ 
+ Nombre                                                                              ¿Nulo?   Tipo
+ ----------------------------------------------------------------------------------- -------- --------------------------------------------------------
+ DEPT_NO                                                                             NOT NULL NUMBER(2)
+ DNOMBRE                                                                                      VARCHAR2(14)
+ LOC                                                                                          VARCHAR2(14)
+*/
+create or replace procedure pasa_datos
+as 
+    cursor c1 is    
+        select dept_no, dnombre, loc from depart;
+
+    cursor c2 is    
+        select emp_no, apellido, oficio, dir, fecha_alt, salario, comision, dept_no from emple;
+begin 
+    for v1 in c1 loop 
+        insert into Tabla_Departamento 
+            values(v1.dept_no, v1.dnombre, v1.loc, 0, 0, 0);       
+    end loop;
+
+    for v2 in c2 loop 
+        insert into Tabla_Empleado
+            values(v2.emp_no, v2.apellido, v2.oficio, v2.dir, v2.fecha_alt, v2.salario, v2.comision, v2.dept_no);
+    end loop;
+
+    dbms_output.put_line('Datos insertados en las nuevas tablas.');
+end;
+
+execute pasa_datos;
+/*Datos insertados en las nuevas tablas.*/
+
+select * from Tabla_Departamento;
+/*NUM_DEPART NOMBRE_DEPART UBICACIÓN       PRESUPUESTO MEDIA_SALARIOS TOTAL_SALARIOS
+---------- --------------- --------------- ----------- -------------- --------------
+        10 CONTABILIDAD    SEVILLA                   0              0              0
+        20 INVESTIGACION   MADRID                    0              0              0
+        30 VENTAS          BARCELONA                 0              0              0
+        40 PRODUCCION      BILBAO                    0              0              0*/
+
+select * from Tabla_Empleado;
+/*NUM_EMPLEADO NOMBRE_EMPLEADO         CATEGORÍA        JEFE FECHA_CO    SALARIO   COMISION NUM_DEPART
+------------ ------------------------- ---------- ---------- -------- ---------- ---------- ----------
+        7369 SANCHEZ                   EMPLEADO         7902 17/12/80     104000                    20
+        7499 ARROYO                    VENDEDOR         7698 20/02/80     208000      39000         30
+        7521 SALA                      VENDEDOR         7698 22/02/81     162500      65000         30
+        7566 JIMENEZ                   DIRECTOR         7839 02/04/81     386750                    20
+        7654 MARTIN                    VENDEDOR         7698 29/09/81     162500     182000         30
+        7698 NEGRO                     DIRECTOR         7839 01/05/81     370500                    30
+        7782 CEREZO                    DIRECTOR         7839 09/06/81     318500                    10
+        7788 GIL                       ANALISTA         7566 09/11/81     390000                    20
+        7839 REY                       PRESIDENTE            17/11/81     650000                    10
+        7844 TOVAR                     VENDEDOR         7698 08/09/81     195000          0         30
+        7876 ALONSO                    EMPLEADO         7788 23/09/81     143000                    20
+        7900 JIMENO                    EMPLEADO         7698 03/12/81     123500                    30
+        7902 FERNANDEZ                 ANALISTA         7566 03/12/81     390000                    20
+        7934 MUÑOZ                     EMPLEADO         7782 23/01/82     169000                    10*/
+
+/*
+* Construya un procedimiento que calcule el presupuesto del departamento para el año próximo. Se
+almacenará el mismo en la tabla Tabla_Departamento en la columna Presupuesto. Hay que tener en
+cuenta las siguientes subidas de sueldo:
+    Gerente + 20%
+    Comercial + 15%
+    Los demás empleados que no estén en ninguna de las categorías anteriores se les subirá el sueldo un
+    10%.
+
+* Construya un procedimiento que actualice el campo Total_Salarios y el campo Media_Salarios de
+la tabla Tabla_Departamento, siendo el total la suma del salario de todos los empleados, igualmente
+con la media.
+    Para ello:
+    − Cree un cursor C1, que devuelva todos los departamentos
+    − Cree un cursor C2, que devuelva el salario y el código de todos los empleados de su
+    departamento.*/
+
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
