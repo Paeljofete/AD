@@ -770,8 +770,6 @@ execute alta_emple(7369, 'TENA', 'ANALISTA', 7902, sysdate, 250000, 50, 10);
 execute alta_emple(8000, 'TENA', 'ANALISTA', 7902, sysdate, null, 50, 20);
 /*Error: -20010ORA-20010: Salario nulo.*/
 
-drop procedure alta_emple;
-
 ----------------------------------------------------------------------------------
 
 --ACTIVIDAD PROPUESTA 7.
@@ -834,11 +832,478 @@ Primera fila.
 Segunda fila.*/
 
 ----------------------------------------------------------------------------------
+
+--ACTIVIDADES COMPLEMENTARIAS.
+
+/*1.Desarrolla un procedimiento que visualice el apellido y la fecha de alta de todos los empleados ordenados
+por apellido.*/
+create or replace procedure emple_apellido
+as 
+    cursor c1 is 
+        select apellido, fecha_alt from emple 
+            order by apellido;
+begin   
+    for v1 in c1 loop 
+        dbms_output.put_line(v1.apellido || ' - ' || v1.fecha_alt || '.');
+    end loop;
+end;
+
+execute emple_apellido;
+/*
+ALONSO - 23/09/81.
+ARROYO - 20/02/80.
+CEREZO - 09/06/81.
+FERNANDEZ - 03/12/81.
+GIL - 09/11/81.
+JIMENEZ - 02/04/81.
+JIMENO - 03/12/81.
+MARTIN - 29/09/81.
+MUÑOZ - 23/01/82.
+NEGRO - 01/05/81.
+REY - 17/11/81.
+SALA - 22/02/81.
+SANCHEZ - 17/12/80.
+TOVAR - 08/09/81.*/
+
 ----------------------------------------------------------------------------------
+
+/*2. Codifica un procedimiento que muestre el nombre de cada departamento y el número de empleados que tiene.*/
+create or replace procedure depart_emple 
+as 
+    cursor c1 is 
+        select dnombre, count(emp_no) numero from emple e, depart d 
+            where d.dept_no = e.dept_no(+)
+            group by dnombre;
+begin 
+    for v1 in c1 loop 
+        dbms_output.put_line(v1.dnombre || ' - ' || v1.numero || '.');
+    end loop;
+end;
+
+execute depart_emple;
+/*CONTABILIDAD - 3.
+INVESTIGACION - 5.
+PRODUCCION - 0.
+VENTAS - 6.*/
+
 ----------------------------------------------------------------------------------
+
+/*3. Escribe un programa que visualice el apellido y el salario de los cinco empleados que tienen el salario más alto.*/
+create or replace procedure salario_mas_alto
+as 
+    v_contador number default 1;
+
+    cursor c1 is 
+        select apellido, salario from emple 
+            order by salario desc;
+begin 
+    for v1 in c1 loop 
+        if v_contador <= 5 then
+            dbms_output.put_line(v1.apellido || ' - ' || v1.salario || '.');
+            v_contador := v_contador + 1;
+        end if;
+    end loop;
+end;
+
+execute salario_mas_alto;
+/*REY - 650000.
+GIL - 390000.
+FERNANDEZ - 390000.
+JIMENEZ - 386750.
+NEGRO - 370500.*/
+
 ----------------------------------------------------------------------------------
+
+/*4. Codifica un programa que visualice los dos empleados que ganan menos de cada oficio.*/
+-- Cursor con parámetro.
+create or replace procedure salario_mas_bajo 
+as 
+    v_contador number default 1;
+
+    cursor c1 is 
+        select distinct oficio from emple;
+
+    cursor c2(p_oficio emple.oficio%type) is 
+        select * from emple 
+            where oficio = p_oficio
+            order by salario;
+begin 
+    for v1 in c1 loop  
+        for v2 in c2(v1.oficio) loop 
+            if v_contador <= 2 then 
+                dbms_output.put_line(v2.apellido || ' - ' || v2.salario || ' - ' || v1.oficio || '.');
+                v_contador := v_contador + 1;
+            end if;       
+        end loop;
+
+        v_contador := 1;
+    end loop;
+end;
+
+execute salario_mas_bajo;
+/*GIL - 390000 - ANALISTA.
+FERNANDEZ - 390000 - ANALISTA.
+CEREZO - 318500 - DIRECTOR.
+NEGRO - 370500 - DIRECTOR.
+SANCHEZ - 104000 - EMPLEADO.
+JIMENO - 123500 - EMPLEADO.
+REY - 650000 - PRESIDENTE.
+SALA - 162500 - VENDEDOR.
+MARTIN - 162500 - VENDEDOR.*/
+
+-- Con variable de acomplamiento.
+create or replace procedure salario_mas_bajo 
+as 
+    v_contador number default 1;
+    v_oficio emple.oficio%type;
+
+    cursor c1 is 
+        select distinct oficio from emple;
+
+    cursor c2 is 
+        select * from emple 
+            where oficio = v_oficio
+            order by oficio, salario;
+begin 
+    for v1 in c1 loop 
+        v_oficio := v1.oficio;
+
+        for v2 in c2 loop 
+            if v_contador <= 2 then 
+                dbms_output.put_line(v2.apellido || ' - ' || v2.salario || ' - ' || v1.oficio || '.');
+                v_contador := v_contador + 1;
+            end if;       
+        end loop;
+
+        v_contador := 1;
+    end loop;
+end;
+
+execute salario_mas_bajo;
+/*GIL - 390000 - ANALISTA.
+FERNANDEZ - 390000 - ANALISTA.
+CEREZO - 318500 - DIRECTOR.
+NEGRO - 370500 - DIRECTOR.
+SANCHEZ - 104000 - EMPLEADO.
+JIMENO - 123500 - EMPLEADO.
+REY - 650000 - PRESIDENTE.
+SALA - 162500 - VENDEDOR.
+MARTIN - 162500 - VENDEDOR.*/
+
 ----------------------------------------------------------------------------------
+
+/*5. Desarrolla un procedimiento que permita insertar nuevos departamentos según las siguientes especificaciones:
+    – Se pasará al procedimiento el nombre del departamento y la localidad.
+    – El procedimiento insertará la fila nueva asignando como número de departamento la decena siguiente al
+        número mayor de la tabla.
+    – Se incluirá la gestión de posibles errores.*/
+create or replace procedure insertar_depart(
+    nombre_depart depart.dnombre%type,
+    localidad depart.loc%type)
+as 
+    departamento_existe exception;
+    v_dept_no depart.dept_no%type;
+
+    cursor c1 is 
+        select dnombre from depart 
+            where dnombre = nombre_depart;
+begin 
+    for v1 in c1 loop 
+        if c1%rowcount = 1 then 
+            raise departamento_existe;
+        end if;
+    end loop;
+
+    select max(dept_no) into v_dept_no from depart;
+
+    insert into depart 
+        values((trunc(v_dept_no, -1) + 10), nombre_depart, localidad);
+    
+    dbms_output.put_line('Departamento añadido.');
+exception
+    when departamento_existe then 
+        dbms_output.put_line('El departamento ya está creado.');
+end;
+
+execute insertar_depart('CONTABILIDAD', 'SEVILLA');
+/*El departamento ya está creado.*/
+
+execute insertar_depart('DESARROLLO', 'SEVILLA');
+/*Departamento añadido.*/
+/*   DEPT_NO DNOMBRE        LOC
+---------- -------------- --------------
+        10 CONTABILIDAD   SEVILLA
+        20 INVESTIGACION  MADRID
+        30 VENTAS         BARCELONA
+        40 PRODUCCION     BILBAO
+        50 DESARROLLO     SEVILLA*/
+
 ----------------------------------------------------------------------------------
+
+/*6. Codifica un procedimiento que reciba como parámetros un número de departamento, un importe y un porcentaje;
+y que suba el salario a todos los empleados del departamento indicado en la llamada. La subida
+será el porcentaje o el importe que se indica en la llamada (el que sea más beneficioso para el empleado en
+cada caso).*/ 
+create or replace procedure subida_salario(
+    numero_depart emple.dept_no%type,
+    importe number,
+    porcentaje number)
+as  
+    cursor c1 is 
+        select salario, rowid from emple 
+            where dept_no = numero_depart;
+    
+    v_subida c1%rowtype;
+    v_importe number(10);
+begin 
+    for v1 in c1 loop 
+        v_importe := greatest((v_subida.salario / 100) * porcentaje, v_importe);
+
+        update emple set salario = salario + v_importe 
+            where rowid = v_subida.rowid;
+
+        dbms_output.put_line('Subida de salario realizada.');
+    end loop;
+exception 
+    when no_data_found then 
+        dbms_output.put_line('No hay empleados en el departamento.');
+end;
+
+execute subida_salario(20, 200000, 10);
+
 ----------------------------------------------------------------------------------
+
+/*7. Escribe un procedimiento que suba el sueldo de todos los empleados que ganen menos que el salario medio
+de su oficio. La subida será del 50 por 100 de la diferencia entre el salario del empleado y la media de su
+oficio. Se deberá hacer que la transacción no se quede a medias, y se gestionarán los posibles errores.
+CREATE OR REPLACE PROCEDURE subida_50pct
+AS
+CURSOR c_ofi_sal IS
+SELECT oficio, AVG(salario) salario FROM emple
+GROUP BY oficio;
+CURSOR c_emp_sal IS
+SELECT oficio, salario FROM emple E1
+WHERE salario <
+(SELECT AVG(salario) FROM emple E2
+WHERE E2.oficio = E1.oficio)
+ORDER BY oficio, salario FOR UPDATE OF salario;
+
+vr_ofi_sal c_ofi_sal%ROWTYPE;
+vr_emp_sal c_emp_sal%ROWTYPE;
+v_incremento emple.salario%TYPE;
+
+BEGIN
+COMMIT;
+OPEN c_emp_sal;
+FETCH c_emp_sal INTO vr_emp_sal;
+OPEN c_ofi_sal;
+FETCH c_ofi_sal INTO vr_ofi_sal;
+WHILE c_ofi_sal%FOUND AND c_emp_sal%FOUND LOOP
+
+/* calcular incremento */
+v_incremento :=
+(vr_ofi_sal.salario - vr_emp_sal.salario) / 2;
+
+/* actualizar */
+UPDATE emple SET salario = salario + v_incremento
+WHERE CURRENT OF c_emp_sal;
+
+/* siguiente empleado */
+FETCH c_emp_sal INTO vr_emp_sal;
+
+/* comprobar si es otro oficio */
+IF c_ofi_sal%FOUND and
+vr_ofi_sal.oficio <> vr_emp_sal.oficio THEN
+FETCH c_ofi_sal INTO vr_ofi_sal;
+END IF;
+END LOOP;
+CLOSE c_emp_sal;
+CLOSE c_ofi_sal;
+COMMIT;
+EXCEPTION
+WHEN OTHERS THEN
+ROLLBACK WORK;
+RAISE;
+END subida_50pct;
+
+
 ----------------------------------------------------------------------------------
+
+/*8. Diseña una aplicación que simule un listado de liquidación
+de los empleados según las siguientes especificaciones:
+– El listado tendrá el siguiente formato para cada
+empleado:
+**********************************
+Liquidación del empleado : (1)
+Dpto : (2)
+Oficio : (3)
+Salario : (4)
+Trienios : (5)
+Comp. responsabilidad : (6)
+Comisión : (7)
+**********************************
+Total : (8)
+**********************************
+Donde:
+– 1, 2, 3 y 4 corresponden a apellido, departamento,
+oficio y salario del empleado.
+– 5 es el importe en concepto de trieniosUn trienio
+son tres años completos, desde la fecha de alta hasta
+la de emisión, y supone 50 €.
+– 6 es el complemento por responsabilidad. Será de 100 €
+por cada empleado que se encuentre directamente a
+cargo del empleado en cuestión.
+– 7 es la comisión. Los valores nulos serán sustituidos
+por ceros.
+– 8 es la suma de todos los conceptos anteriores.
+El listado irá ordenado por Apellido.*/
+CREATE OR REPLACE PROCEDURE liquidar
+AS
+CURSOR c_emp IS
+SELECT apellido, emp_no, oficio, salario,
+NVL(comision,0) comision, dept_no, fecha_alt
+FROM emple
+ORDER BY apellido;
+vr_emp c_emp%ROWTYPE;
+v_trien NUMBER(9) DEFAULT 0;
+v_comp_r NUMBER(9);
+v_total NUMBER(10);
+BEGIN
+FOR vr_emp in c_emp LOOP
+
+/* Calcular trienios. Llama a la función trienios
+creada en el ejercicio 11.8 */
+v_trien := trienios(vr_emp.fecha_alt,SYSDATE)*5000;
+
+/* Calcular complemento de responsabilidad. Se
+encierra en un bloque pues levantará NO_DATA_FOUND*/
+BEGIN
+SELECT COUNT(*) INTO v_comp_r
+FROM EMPLE WHERE DIR = vr_emp.emp_no;
+v_comp_r := v_comp_r *10000;
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+v_comp_r:=0;
+END;
+
+/* Calcular el total del empleado */
+v_total := vr_emp.salario + vr_emp. comision +
+v_trien + v_comp_r;
+
+/* Visualizar datos del empleado */
+DBMS_OUTPUT.PUT_LINE('*************************************');
+DBMS_OUTPUT.PUT_LINE(' Liquidacion de : '|| vr_emp.apellido
+||' Dpto: ' || vr_emp.dept_no
+|| ' Oficio: ' || vr_emp.oficio);
+DBMS_OUTPUT.PUT_LINE(RPAD('Salario:',16)
+||LPAD(TO_CHAR(vr_emp.salario,'9,999,999'),12));
+DBMS_OUTPUT.PUT_LINE(RPAD('Trienios: ',16)
+|| LPAD(TO_CHAR(v_trien,'9,999,999'),12));
+DBMS_OUTPUT.PUT_LINE('Comp. Respons: '
+||LPAD(TO_CHAR(v_comp_r,'9,999,999'),12));
+DBMS_OUTPUT.PUT_LINE(RPAD('Comision: ' ,16)
+||LPAD(TO_CHAR(vr_emp.comision,'9,999,999'),12));
+DBMS_OUTPUT.PUT_LINE('------------------');
+DBMS_OUTPUT.PUT_LINE(RPAD(' Total : ',16)
+||LPAD(TO_CHAR(v_total,'9,999,999') ,12));
+DBMS_OUTPUT.PUT_LINE('**************************************');
+END LOOP;
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+DBMS_OUTPUT.PUT_LINE('No se ha encontrado ninguna fila');
+END liquidar;
+/* Nota: También se puede utilizar una cláusula SELECT más compleja:
+CURSOR c_emp IS
+SELECT APELLIDO, EMP_NO, OFICIO,
+(EMP_CARGO * 10000) COM_RESPONSABILIDAD,
+SALARIO, NVL(COMISION, 0) COMISION, DEPT_NO,
+TRIENIOS(FECHA_ALT, SYSDATE) * 5000 TOT_TRIENIOS
+FROM EMPLE,(SELECT DIR,COUNT(*) EMP_CARGO FROM EMPLE
+GROUP BY DIR) DIREC
+WHERE EMPLE.EMP_NO = DIREC.DIR(+)
+ORDER BY APELLIDO;
+de esta forma se simplifica el programa y se evita la utilización de variables de trabajo. */
+
+ 
 ----------------------------------------------------------------------------------
+
+/*9. Crea la tabla T_liquidacion con las columnas apellido, departamento, oficio, salario, trienios, comp_responsabilidad,
+comisión y total; y modifica la aplicación anterior para que, en lugar de realizar el listado directamente
+en pantalla, guarde los datos en la tabla. Se controlarán todas las posibles incidencias que puedan
+ocurrir durante el proceso.*/
+
+CREATE TABLE t_liquidacion (
+APELLIDO VARCHAR2(10),
+DEPARTAMENTO NUMBER(2),
+OFICIO VARCHAR2(10),
+SALARIO NUMBER(10),
+TRIENIOS NUMBER(10),
+COMP_RESPONSABILIDAD NUMBER(10),
+COMISION NUMBER(10),
+TOTAL NUMBER(10)
+);
+
+CREATE OR REPLACE PROCEDURE liquidar2
+AS
+CURSOR c_emp IS
+SELECT apellido, emp_no, oficio, salario,
+NVL(comision,0) comision, dept_no, fecha_alt
+FROM emple
+ORDER BY apellido;
+vr_emp c_emp%ROWTYPE;
+v_trien NUMBER(9) DEFAULT 0;
+v_comp_r NUMBER(9);
+v_total NUMBER(10);
+BEGIN
+COMMIT WORK;
+FOR vr_emp in c_emp LOOP
+
+/* Calcular trienios. Llama a la función trienios
+creada en el ejercicio 11.8 */
+v_trien := trienios(vr_emp.fecha_alt,SYSDATE)*5000;
+
+/* Calcular complemento de responsabilidad. Se
+encierra en un bloque pues levantará NO_DATA_FOUND*/
+BEGIN
+SELECT COUNT(*) INTO v_comp_r
+FROM EMPLE WHERE DIR = vr_emp.emp_no;
+v_comp_r := v_comp_r *10000;
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+v_comp_r:=0;
+END;
+
+/* Calcular el total del empleado */
+v_total := vr_emp.salario + vr_emp. comision +
+v_trien + v_comp_r;
+
+/* Insertar los datos en la tabla T_liquidacion */
+INSERT INTO t_liquidacion
+(APELLIDO, OFICIO, SALARIO, TRIENIOS,
+COMP_RESPONSABILIDAD, COMISION, TOTAL)
+VALUES
+(vr_emp.apellido, vr_emp.oficio, vr_emp.salario,
+v_trien, v_comp_r, vr_emp.comision, v_total);
+END LOOP;
+EXCEPTION
+WHEN OTHERS THEN
+ROLLBACK WORK;
+END liquidar2;
+
+
+----------------------------------------------------------------------------------
+
+/*10. Escribe un programa para introducir nuevos pedidos según las siguientes especificaciones:
+– Recibirá como parámetros PEDIDO_NO, PRODUCTO_NO, CLIENTE_NO, UNIDADES y la FECHA_PEDIDO (opcional,
+por defecto la del sistema). Verificará todos estos datos así como las unidades disponibles del
+producto y el límite de crédito del cliente y fallará enviado un mensaje de error en caso de que alguno
+sea erróneo.
+– Insertará el pedido y actualizará la columna DEBE de clientes incrementándola el valor del pedido (UNIDADES
+* PRECIO_ACTUAL). También actualizará las
+unidades disponibles del producto e incrementará la comisión para el empleado correspondiente al
+cliente en un 5% del valor total del pedido. Todas
+estas operaciones se realizarán como una única
+transacción.*/
+----------------------------------------------------------------------------------
+
+drop procedure depart_emple;
