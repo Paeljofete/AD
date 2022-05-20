@@ -1045,265 +1045,414 @@ y que suba el salario a todos los empleados del departamento indicado en la llam
 será el porcentaje o el importe que se indica en la llamada (el que sea más beneficioso para el empleado en
 cada caso).*/ 
 create or replace procedure subida_salario(
-    numero_depart emple.dept_no%type,
-    importe number,
-    porcentaje number)
+    p_dept_no emple.dept_no%type,
+    p_importe number,
+    p_porcentaje number)
 as  
     cursor c1 is 
-        select salario, rowid from emple 
-            where dept_no = numero_depart;
-    
-    v_subida c1%rowtype;
+        select salario from emple 
+            where dept_no = p_dept_no for update;
+
     v_importe number(10);
+    v_porcentaje number(10);
 begin 
     for v1 in c1 loop 
-        v_importe := greatest((v_subida.salario / 100) * porcentaje, v_importe);
+        v_porcentaje := v1.salario * (p_porcentaje / 100);
+        v_importe := greatest(v_porcentaje, p_importe);
 
         update emple set salario = salario + v_importe 
-            where rowid = v_subida.rowid;
-
-        dbms_output.put_line('Subida de salario realizada.');
-    end loop;
-exception 
-    when no_data_found then 
-        dbms_output.put_line('No hay empleados en el departamento.');
+            where current of c1;
+    end loop; 
+        
+    dbms_output.put_line('Subida de salario realizada.');
 end;
 
-execute subida_salario(20, 200000, 10);
+select * from emple 
+    where dept_no = 20;
+/*  EMP_NO APELLIDO   OFICIO            DIR FECHA_ALT     SALARIO   COMISION    DEPT_NO
+---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+      7369 SANCHEZ    EMPLEADO         7902 17/12/1990       1040                    20
+      7566 JIMENEZ    DIRECTOR         7839 02/04/1991       2900                    20
+      7788 GIL        ANALISTA         7566 09/11/1991       3000                    20
+      7876 ALONSO     EMPLEADO         7788 23/09/1991       1430                    20
+      7902 FERNANDEZ  ANALISTA         7566 03/12/1991       3000                    20*/
+
+execute subida_salario(20, 250, 10);
+/*Subida de salario realizada.*/
+
+select * from emple 
+    where dept_no = 20;
+/*  EMP_NO APELLIDO   OFICIO            DIR FECHA_ALT     SALARIO   COMISION    DEPT_NO
+---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+      7369 SANCHEZ    EMPLEADO         7902 17/12/1990       1290                    20
+      7566 JIMENEZ    DIRECTOR         7839 02/04/1991       3190                    20
+      7788 GIL        ANALISTA         7566 09/11/1991       3300                    20
+      7876 ALONSO     EMPLEADO         7788 23/09/1991       1680                    20
+      7902 FERNANDEZ  ANALISTA         7566 03/12/1991       3300                    20*/
 
 ----------------------------------------------------------------------------------
 
 /*7. Escribe un procedimiento que suba el sueldo de todos los empleados que ganen menos que el salario medio
 de su oficio. La subida será del 50 por 100 de la diferencia entre el salario del empleado y la media de su
-oficio. Se deberá hacer que la transacción no se quede a medias, y se gestionarán los posibles errores.
-CREATE OR REPLACE PROCEDURE subida_50pct
-AS
-CURSOR c_ofi_sal IS
-SELECT oficio, AVG(salario) salario FROM emple
-GROUP BY oficio;
-CURSOR c_emp_sal IS
-SELECT oficio, salario FROM emple E1
-WHERE salario <
-(SELECT AVG(salario) FROM emple E2
-WHERE E2.oficio = E1.oficio)
-ORDER BY oficio, salario FOR UPDATE OF salario;
+oficio. Se deberá hacer que la transacción no se quede a medias, y se gestionarán los posibles errores.*/
+create or replace procedure subida_salario_medio
+as 
+    v_importe emple.salario%type;
+    v_oficio emple.oficio%type;
 
-vr_ofi_sal c_ofi_sal%ROWTYPE;
-vr_emp_sal c_emp_sal%ROWTYPE;
-v_incremento emple.salario%TYPE;
+    cursor c1 is 
+        select oficio, avg(salario) salario_medio from emple 
+            group by oficio;
+    
+    cursor c2 is 
+        select * from emple 
+            where oficio = v_oficio for update;
+begin 
+    for v1 in c1 loop 
+        v_oficio := v1.oficio;
 
-BEGIN
-COMMIT;
-OPEN c_emp_sal;
-FETCH c_emp_sal INTO vr_emp_sal;
-OPEN c_ofi_sal;
-FETCH c_ofi_sal INTO vr_ofi_sal;
-WHILE c_ofi_sal%FOUND AND c_emp_sal%FOUND LOOP
+        for v2 in c2 loop 
+            if v2.salario < v1.salario_medio then 
+                v_importe := (v1.salario_medio - v2.salario) / 2;
 
-/* calcular incremento */
-v_incremento :=
-(vr_ofi_sal.salario - vr_emp_sal.salario) / 2;
+                update emple set salario = v_importe + salario
+                    where current of c2;
+            end if;
+        end loop;
+    end loop;
+    
+    dbms_output.put_line('Salario actualizado.');
 
-/* actualizar */
-UPDATE emple SET salario = salario + v_incremento
-WHERE CURRENT OF c_emp_sal;
+    commit;
+exception 
+    when others then 
+        rollback;
+end;
 
-/* siguiente empleado */
-FETCH c_emp_sal INTO vr_emp_sal;
+select oficio, avg(salario) salario_medio from emple 
+    group by oficio;
+/*OFICIO   SALARIO_MEDIO
+---------- -------------
+ANALISTA            3000
+DIRECTOR            2930
+EMPLEADO         1373,75
+PRESIDENTE          4100
+VENDEDOR         1518,75*/
 
-/* comprobar si es otro oficio */
-IF c_ofi_sal%FOUND and
-vr_ofi_sal.oficio <> vr_emp_sal.oficio THEN
-FETCH c_ofi_sal INTO vr_ofi_sal;
-END IF;
-END LOOP;
-CLOSE c_emp_sal;
-CLOSE c_ofi_sal;
-COMMIT;
-EXCEPTION
-WHEN OTHERS THEN
-ROLLBACK WORK;
-RAISE;
-END subida_50pct;
+select * from emple;
+/*  EMP_NO APELLIDO   OFICIO            DIR FECHA_ALT     SALARIO   COMISION    DEPT_NO
+---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+      7369 SANCHEZ    EMPLEADO         7902 17/12/1990       1040                    20
+      7499 ARROYO     VENDEDOR         7698 20/02/1990       1500        390         30
+      7521 SALA       VENDEDOR         7698 22/02/1991       1625        650         30
+      7566 JIMENEZ    DIRECTOR         7839 02/04/1991       2900                    20
+      7654 MARTIN     VENDEDOR         7698 29/09/1991       1600       1020         30
+      7698 NEGRO      DIRECTOR         7839 01/05/1991       3005                    30
+      7782 CEREZO     DIRECTOR         7839 09/06/1991       2885                    10
+      7788 GIL        ANALISTA         7566 09/11/1991       3000                    20
+      7839 REY        PRESIDENTE            17/11/1991       4100                    10
+      7844 TOVAR      VENDEDOR         7698 08/09/1991       1350          0         30
+      7876 ALONSO     EMPLEADO         7788 23/09/1991       1430                    20
+      7900 JIMENO     EMPLEADO         7698 03/12/1991       1335                    30
+      7902 FERNANDEZ  ANALISTA         7566 03/12/1991       3000                    20
+      7934 MUÑOZ      EMPLEADO         7782 23/01/1992       1690                    10*/
 
+execute subida_salario_medio;
+/*Salario actualizado.*/
+
+select * from emple;
+/*  EMP_NO APELLIDO   OFICIO            DIR FECHA_ALT     SALARIO   COMISION    DEPT_NO
+---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+      7369 SANCHEZ    EMPLEADO         7902 17/12/1990       1207                    20
+      7499 ARROYO     VENDEDOR         7698 20/02/1990       1509        390         30
+      7521 SALA       VENDEDOR         7698 22/02/1991       1625        650         30
+      7566 JIMENEZ    DIRECTOR         7839 02/04/1991       2915                    20
+      7654 MARTIN     VENDEDOR         7698 29/09/1991       1600       1020         30
+      7698 NEGRO      DIRECTOR         7839 01/05/1991       3005                    30
+      7782 CEREZO     DIRECTOR         7839 09/06/1991       2908                    10
+      7788 GIL        ANALISTA         7566 09/11/1991       3000                    20
+      7839 REY        PRESIDENTE            17/11/1991       4100                    10
+      7844 TOVAR      VENDEDOR         7698 08/09/1991       1434          0         30
+      7876 ALONSO     EMPLEADO         7788 23/09/1991       1430                    20
+      7900 JIMENO     EMPLEADO         7698 03/12/1991       1354                    30
+      7902 FERNANDEZ  ANALISTA         7566 03/12/1991       3000                    20
+      7934 MUÑOZ      EMPLEADO         7782 23/01/1992       1690                    10*/
 
 ----------------------------------------------------------------------------------
 
-/*8. Diseña una aplicación que simule un listado de liquidación
-de los empleados según las siguientes especificaciones:
-– El listado tendrá el siguiente formato para cada
-empleado:
+/*8. Diseña una aplicación que simule un listado de liquidación de los empleados según las siguientes especificaciones:
+    – El listado tendrá el siguiente formato para cada empleado:
+            **********************************
+            Liquidación del empleado:  (1)
+            Dpto:                      (2)
+            Oficio:                    (3)
+            Salario:                   (4)
+            Trienios:                  (5)
+            Comp. responsabilidad:     (6)
+            Comisión:                  (7)
+            **********************************
+            Total:                     (8)
+            **********************************
+    Donde:
+    – 1, 2, 3 y 4 corresponden a apellido, departamento, oficio y salario del empleado.
+    – 5 es el importe en concepto de trienios. Un trienio son tres años completos, desde la fecha de alta hasta
+    la de emisión, y supone 50€.
+    – 6 es el complemento por responsabilidad. Será de 100€ por cada empleado que se encuentre directamente a
+    cargo del empleado en cuestión.
+    – 7 es la comisión. Los valores nulos serán sustituidos por ceros.
+    – 8 es la suma de todos los conceptos anteriores.
+    El listado irá ordenado por Apellido.*/
+create or replace procedure liquidacion 
+as 
+    cursor c1 is 
+        select emp_no, apellido, fecha_alt, oficio, salario, nvl(comision, 0) comision, dept_no from emple;
+
+    v_trienios emple.salario%type;
+    v_complemento number(3);
+    v_total number(10);
+begin   
+    for v1 in c1 loop 
+        select trunc((to_char(sysdate, 'YYYY') - to_char(fecha_alt, 'YYYY')) / 3) * 50 into v_trienios from emple 
+            where emp_no = v1.emp_no;
+
+        select count(*) into v_complemento from emple 
+            where dir = v1.emp_no;
+        v_complemento := v_complemento * 100;
+    
+        v_total := v1.salario + v1.comision + v_trienios + v_complemento;
+
+        dbms_output.put_line('**********************************');
+        dbms_output.put_line(rpad('Liquidación del empleado:', 27) || v1.apellido);
+        dbms_output.put_line(rpad('Dpto:', 27) || v1.dept_no);
+        dbms_output.put_line(rpad('Oficio:', 27) || v1.oficio);
+        dbms_output.put_line(rpad('Salario:', 27) || v1.salario);
+        dbms_output.put_line(rpad('Trienios:', 27) || v_trienios);
+        dbms_output.put_line(rpad('Comp. responsabilidad:', 27) || v_complemento);
+        dbms_output.put_line(rpad('Comisión:', 27) || v1.comision);
+        dbms_output.put_line('**********************************');
+        dbms_output.put_line(rpad('Total:', 27) || v_total);
+        dbms_output.put_line('**********************************');
+    end loop;
+end;
+
+execute liquidacion;
+/**********************************
+Liquidación del empleado:  SANCHEZ
+Dpto:                      20
+Oficio:                    EMPLEADO
+Salario:                   1207
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  0
 **********************************
-Liquidación del empleado : (1)
-Dpto : (2)
-Oficio : (3)
-Salario : (4)
-Trienios : (5)
-Comp. responsabilidad : (6)
-Comisión : (7)
+Total:                     1707
 **********************************
-Total : (8)
 **********************************
-Donde:
-– 1, 2, 3 y 4 corresponden a apellido, departamento,
-oficio y salario del empleado.
-– 5 es el importe en concepto de trieniosUn trienio
-son tres años completos, desde la fecha de alta hasta
-la de emisión, y supone 50 €.
-– 6 es el complemento por responsabilidad. Será de 100 €
-por cada empleado que se encuentre directamente a
-cargo del empleado en cuestión.
-– 7 es la comisión. Los valores nulos serán sustituidos
-por ceros.
-– 8 es la suma de todos los conceptos anteriores.
-El listado irá ordenado por Apellido.*/
-CREATE OR REPLACE PROCEDURE liquidar
-AS
-CURSOR c_emp IS
-SELECT apellido, emp_no, oficio, salario,
-NVL(comision,0) comision, dept_no, fecha_alt
-FROM emple
-ORDER BY apellido;
-vr_emp c_emp%ROWTYPE;
-v_trien NUMBER(9) DEFAULT 0;
-v_comp_r NUMBER(9);
-v_total NUMBER(10);
-BEGIN
-FOR vr_emp in c_emp LOOP
+Liquidación del empleado:  ARROYO
+Dpto:                      30
+Oficio:                    VENDEDOR
+Salario:                   1509
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  390
+**********************************
+Total:                     2399
+**********************************
+**********************************
+Liquidación del empleado:  SALA
+Dpto:                      30
+Oficio:                    VENDEDOR
+Salario:                   1625
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  650
+**********************************
+Total:                     2775
+**********************************
+**********************************
+Liquidación del empleado:  JIMENEZ
+Dpto:                      20
+Oficio:                    DIRECTOR
+Salario:                   2915
+Trienios:                  500
+Comp. responsabilidad:     200
+Comisión:                  0
+**********************************
+Total:                     3615
+**********************************
+**********************************
+Liquidación del empleado:  MARTIN
+Dpto:                      30
+Oficio:                    VENDEDOR
+Salario:                   1600
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  1020
+**********************************
+Total:                     3120
+**********************************
+**********************************
+Liquidación del empleado:  NEGRO
+Dpto:                      30
+Oficio:                    DIRECTOR
+Salario:                   3005
+Trienios:                  500
+Comp. responsabilidad:     500
+Comisión:                  0
+**********************************
+Total:                     4005
+**********************************
+**********************************
+Liquidación del empleado:  CEREZO
+Dpto:                      10
+Oficio:                    DIRECTOR
+Salario:                   2908
+Trienios:                  500
+Comp. responsabilidad:     100
+Comisión:                  0
+**********************************
+Total:                     3508
+**********************************
+**********************************
+Liquidación del empleado:  GIL
+Dpto:                      20
+Oficio:                    ANALISTA
+Salario:                   3000
+Trienios:                  500
+Comp. responsabilidad:     100
+Comisión:                  0
+**********************************
+Total:                     3600
+**********************************
+**********************************
+Liquidación del empleado:  REY
+Dpto:                      10
+Oficio:                    PRESIDENTE
+Salario:                   4100
+Trienios:                  500
+Comp. responsabilidad:     300
+Comisión:                  0
+**********************************
+Total:                     4900
+**********************************
+**********************************
+Liquidación del empleado:  TOVAR
+Dpto:                      30
+Oficio:                    VENDEDOR
+Salario:                   1434
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  0
+**********************************
+Total:                     1934
+**********************************
+**********************************
+Liquidación del empleado:  ALONSO
+Dpto:                      20
+Oficio:                    EMPLEADO
+Salario:                   1430
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  0
+**********************************
+Total:                     1930
+**********************************
+**********************************
+Liquidación del empleado:  JIMENO
+Dpto:                      30
+Oficio:                    EMPLEADO
+Salario:                   1354
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  0
+**********************************
+Total:                     1854
+**********************************
+**********************************
+Liquidación del empleado:  FERNANDEZ
+Dpto:                      20
+Oficio:                    ANALISTA
+Salario:                   3000
+Trienios:                  500
+Comp. responsabilidad:     100
+Comisión:                  0
+**********************************
+Total:                     3600
+**********************************
+**********************************
+Liquidación del empleado:  MUÑOZ
+Dpto:                      10
+Oficio:                    EMPLEADO
+Salario:                   1690
+Trienios:                  500
+Comp. responsabilidad:     0
+Comisión:                  0
+**********************************
+Total:                     2190
+**********************************/
 
-/* Calcular trienios. Llama a la función trienios
-creada en el ejercicio 11.8 */
-v_trien := trienios(vr_emp.fecha_alt,SYSDATE)*5000;
-
-/* Calcular complemento de responsabilidad. Se
-encierra en un bloque pues levantará NO_DATA_FOUND*/
-BEGIN
-SELECT COUNT(*) INTO v_comp_r
-FROM EMPLE WHERE DIR = vr_emp.emp_no;
-v_comp_r := v_comp_r *10000;
-EXCEPTION
-WHEN NO_DATA_FOUND THEN
-v_comp_r:=0;
-END;
-
-/* Calcular el total del empleado */
-v_total := vr_emp.salario + vr_emp. comision +
-v_trien + v_comp_r;
-
-/* Visualizar datos del empleado */
-DBMS_OUTPUT.PUT_LINE('*************************************');
-DBMS_OUTPUT.PUT_LINE(' Liquidacion de : '|| vr_emp.apellido
-||' Dpto: ' || vr_emp.dept_no
-|| ' Oficio: ' || vr_emp.oficio);
-DBMS_OUTPUT.PUT_LINE(RPAD('Salario:',16)
-||LPAD(TO_CHAR(vr_emp.salario,'9,999,999'),12));
-DBMS_OUTPUT.PUT_LINE(RPAD('Trienios: ',16)
-|| LPAD(TO_CHAR(v_trien,'9,999,999'),12));
-DBMS_OUTPUT.PUT_LINE('Comp. Respons: '
-||LPAD(TO_CHAR(v_comp_r,'9,999,999'),12));
-DBMS_OUTPUT.PUT_LINE(RPAD('Comision: ' ,16)
-||LPAD(TO_CHAR(vr_emp.comision,'9,999,999'),12));
-DBMS_OUTPUT.PUT_LINE('------------------');
-DBMS_OUTPUT.PUT_LINE(RPAD(' Total : ',16)
-||LPAD(TO_CHAR(v_total,'9,999,999') ,12));
-DBMS_OUTPUT.PUT_LINE('**************************************');
-END LOOP;
-EXCEPTION
-WHEN NO_DATA_FOUND THEN
-DBMS_OUTPUT.PUT_LINE('No se ha encontrado ninguna fila');
-END liquidar;
-/* Nota: También se puede utilizar una cláusula SELECT más compleja:
-CURSOR c_emp IS
-SELECT APELLIDO, EMP_NO, OFICIO,
-(EMP_CARGO * 10000) COM_RESPONSABILIDAD,
-SALARIO, NVL(COMISION, 0) COMISION, DEPT_NO,
-TRIENIOS(FECHA_ALT, SYSDATE) * 5000 TOT_TRIENIOS
-FROM EMPLE,(SELECT DIR,COUNT(*) EMP_CARGO FROM EMPLE
-GROUP BY DIR) DIREC
-WHERE EMPLE.EMP_NO = DIREC.DIR(+)
-ORDER BY APELLIDO;
-de esta forma se simplifica el programa y se evita la utilización de variables de trabajo. */
-
- 
 ----------------------------------------------------------------------------------
 
 /*9. Crea la tabla T_liquidacion con las columnas apellido, departamento, oficio, salario, trienios, comp_responsabilidad,
 comisión y total; y modifica la aplicación anterior para que, en lugar de realizar el listado directamente
 en pantalla, guarde los datos en la tabla. Se controlarán todas las posibles incidencias que puedan
 ocurrir durante el proceso.*/
-
-CREATE TABLE t_liquidacion (
-APELLIDO VARCHAR2(10),
-DEPARTAMENTO NUMBER(2),
-OFICIO VARCHAR2(10),
-SALARIO NUMBER(10),
-TRIENIOS NUMBER(10),
-COMP_RESPONSABILIDAD NUMBER(10),
-COMISION NUMBER(10),
-TOTAL NUMBER(10)
+create table t_liquidacion(
+    apellido varchar2(10),
+    departamento number(2),
+    oficio varchar(10),
+    salario number(7),
+    trienios number(4),
+    comp_responsabilidad number(7),
+    comision number(7), 
+    total number(10)
 );
 
-CREATE OR REPLACE PROCEDURE liquidar2
-AS
-CURSOR c_emp IS
-SELECT apellido, emp_no, oficio, salario,
-NVL(comision,0) comision, dept_no, fecha_alt
-FROM emple
-ORDER BY apellido;
-vr_emp c_emp%ROWTYPE;
-v_trien NUMBER(9) DEFAULT 0;
-v_comp_r NUMBER(9);
-v_total NUMBER(10);
-BEGIN
-COMMIT WORK;
-FOR vr_emp in c_emp LOOP
+create or replace procedure liquidacion 
+as 
+    cursor c1 is 
+        select emp_no, apellido, fecha_alt, oficio, salario, nvl(comision, 0) comision, dept_no from emple;
 
-/* Calcular trienios. Llama a la función trienios
-creada en el ejercicio 11.8 */
-v_trien := trienios(vr_emp.fecha_alt,SYSDATE)*5000;
+    v_trienios emple.salario%type;
+    v_complemento number(3);
+    v_total number(10);
+begin   
+    for v1 in c1 loop 
+        select trunc((to_char(sysdate, 'YYYY') - to_char(fecha_alt, 'YYYY')) / 3) * 50 into v_trienios from emple 
+            where emp_no = v1.emp_no;
 
-/* Calcular complemento de responsabilidad. Se
-encierra en un bloque pues levantará NO_DATA_FOUND*/
-BEGIN
-SELECT COUNT(*) INTO v_comp_r
-FROM EMPLE WHERE DIR = vr_emp.emp_no;
-v_comp_r := v_comp_r *10000;
-EXCEPTION
-WHEN NO_DATA_FOUND THEN
-v_comp_r:=0;
-END;
+        select count(*) into v_complemento from emple 
+            where dir = v1.emp_no;
+        v_complemento := v_complemento * 100;
+    
+        v_total := v1.salario + v1.comision + v_trienios + v_complemento;
+   
+        insert into t_liquidacion 
+            values(v1.apellido, v1.dept_no, v1.oficio, v1.salario, v_trienios, v_complemento, v1.comision, v_total);
+    end loop;
+exception 
+    when others then 
+        rollback;
+end;
 
-/* Calcular el total del empleado */
-v_total := vr_emp.salario + vr_emp. comision +
-v_trien + v_comp_r;
+execute liquidacion;
 
-/* Insertar los datos en la tabla T_liquidacion */
-INSERT INTO t_liquidacion
-(APELLIDO, OFICIO, SALARIO, TRIENIOS,
-COMP_RESPONSABILIDAD, COMISION, TOTAL)
-VALUES
-(vr_emp.apellido, vr_emp.oficio, vr_emp.salario,
-v_trien, v_comp_r, vr_emp.comision, v_total);
-END LOOP;
-EXCEPTION
-WHEN OTHERS THEN
-ROLLBACK WORK;
-END liquidar2;
-
+select * from t_liquidacion;
+/*APELLIDO DEPARTAMENTO OFICIO        SALARIO   TRIENIOS COMP_RESPONSABILIDAD   COMISION      TOTAL
+---------- ------------ ---------- ---------- ---------- -------------------- ---------- ----------
+SANCHEZ              20 EMPLEADO         1207        500                    0          0       1707
+ARROYO               30 VENDEDOR         1509        500                    0        390       2399
+SALA                 30 VENDEDOR         1625        500                    0        650       2775
+JIMENEZ              20 DIRECTOR         2915        500                  200          0       3615
+MARTIN               30 VENDEDOR         1600        500                    0       1020       3120
+NEGRO                30 DIRECTOR         3005        500                  500          0       4005
+CEREZO               10 DIRECTOR         2908        500                  100          0       3508
+GIL                  20 ANALISTA         3000        500                  100          0       3600
+REY                  10 PRESIDENTE       4100        500                  300          0       4900
+TOVAR                30 VENDEDOR         1434        500                    0          0       1934
+ALONSO               20 EMPLEADO         1430        500                    0          0       1930
+JIMENO               30 EMPLEADO         1354        500                    0          0       1854
+FERNANDEZ            20 ANALISTA         3000        500                  100          0       3600
+MUÑOZ                10 EMPLEADO         1690        500                    0          0       2190*/
 
 ----------------------------------------------------------------------------------
-
-/*10. Escribe un programa para introducir nuevos pedidos según las siguientes especificaciones:
-– Recibirá como parámetros PEDIDO_NO, PRODUCTO_NO, CLIENTE_NO, UNIDADES y la FECHA_PEDIDO (opcional,
-por defecto la del sistema). Verificará todos estos datos así como las unidades disponibles del
-producto y el límite de crédito del cliente y fallará enviado un mensaje de error en caso de que alguno
-sea erróneo.
-– Insertará el pedido y actualizará la columna DEBE de clientes incrementándola el valor del pedido (UNIDADES
-* PRECIO_ACTUAL). También actualizará las
-unidades disponibles del producto e incrementará la comisión para el empleado correspondiente al
-cliente en un 5% del valor total del pedido. Todas
-estas operaciones se realizarán como una única
-transacción.*/
-----------------------------------------------------------------------------------
-
-drop procedure depart_emple;
