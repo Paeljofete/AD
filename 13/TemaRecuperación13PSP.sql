@@ -253,20 +253,149 @@ create table auditaremple(
     col1 varchar2(200)
 );
 
+create or replace trigger auditar_emple 
+    before insert or delete on emple for each row 
+begin 
+    if inserting then 
+        insert into auditaremple
+            values(to_char(sysdate, 'HH24:MI DD/MM/YYYY') || '. ' || :new.emp_no || ' - ' || :new.apellido || '. Inserción.');
+    elsif deleting then 
+        insert into auditaremple
+            values(to_char(sysdate, 'HH24:MI DD/MM/YYYY') || '. ' || :old.emp_no || ' - ' || :old.apellido || '. Borrado.'); 
+    end if;
+end;
 
+insert into emple (emp_no, apellido, dept_no)
+    values(1000, 'CEPEDANO', 10);
+
+delete from emple 
+    where emp_no = 1000;
+
+select * from auditaremple;
+/*COL1
+------------------------------------------------------------------------------------------------------------------------------------------------------
+14:03 21/05/2022. 1000 - CEPEDANO. Borrado.
+14:02 21/05/2022. 1000 - CEPEDANO. Inserción.*/
+
+----------------------------------------------------------------------------------
+
+/*Escribe un trigger que permita auditar las modificaciones en la tabla EMPLEADOS, insertando los siguientes
+datos en la tabla auditaremple: fecha y hora, número de empleado, apellido, la operación de actualización MODIFICACIÓN
+y el valor anterior y el valor nuevo de cada columna modificada (sólo en las columnas modificadas).*/
+create or replace trigger mofificar_emple
+    before update on emple for each row 
+declare 
+    v_cadena auditaremple.col1%type;
+begin   
+    v_cadena := to_char(sysdate, 'HH24:MI DD/MM/YYYY') || '. ' || :old.emp_no || '. Modificación. '; 
+
+    if updating('emp_no') then 
+        v_cadena := v_cadena || :old.emp_no || ' - ' || :new.emp_no;
+    elsif updating('apellido') then 
+        v_cadena := v_cadena || :old.apellido || ' - ' || :new.apellido;
+    elsif updating('oficio') then 
+        v_cadena := v_cadena || :old.oficio || ' - ' || :new.oficio;
+    elsif updating('dir') then 
+        v_cadena := v_cadena || :old.dir || ' - ' || :new.dir;    
+    elsif updating('fecha_alt') then 
+        v_cadena := v_cadena || :old.fecha_alt || ' - ' || :new.fecha_alt; 
+    elsif updating('salario') then 
+        v_cadena := v_cadena || :old.salario || ' - ' || :new.salario; 
+    elsif updating('comision') then 
+        v_cadena := v_cadena || :old.comision || ' - ' || :new.comision;  
+    elsif updating('dept_no') then 
+        v_cadena := v_cadena || :old.dept_no || ' - ' || :new.dept_no;      
+    end if;
+
+    insert into auditaremple
+        values(v_cadena);
+end;
+
+update emple set oficio = 'ANALISTA' 
+    where emp_no = 7369;
+
+update emple set salario = 2000
+    where emp_no = 7654;
+
+select * from auditaremple;
+/*COL1
+------------------------------------------------------------------------------------------------------------------------------------------------------
+14:18 21/05/2022. 7654. Modificación. 1600 - 2000
+14:18 21/05/2022. 7369. Modificación. EMPLEADO - ANALISTA*/
+
+----------------------------------------------------------------------------------
+
+/* Suponiendo que disponemos de la vista:*/
+create view departam as 
+    select depart.dept_no, dnombre, loc, count(emp_no) tot_emple from emple, depart 
+        where emple.dept_no(+) = depart.dept_no
+        group by depart.dept_no, dnombre, loc;
+
+/*Construye un disparador que permita realizar actualizaciones
+en la tabla depart a partir de la vista departam,
+de forma similar al ejemplo del trigger t_ges_emplead. Se
+contemplarán las siguientes operaciones:
+    – Insertar y borrar departamento.
+    – Modificar la localidad de un departamento.*/
+create or replace trigger t_ges_depart 
+    instead of delete or insert or update on departam for each row 
+begin 
+    if deleting then 
+        delete from depart 
+            where dept_no = :old.dept_no;
+    elsif inserting then 
+        insert into depart
+            values(:new.dept_no, :new.dnombre, :new.loc, :new.tot_emple);
+    elsif updating('loc') then 
+        update depart set loc = :new.loc 
+            where dept_no = :old.dept_no;
+    else    
+        raise_application_error(-20500, 'Error en la actualización.');
+    end if;
+end;
+
+insert into departam 
+    values(50, 'DESARROLLO', 'SEVILLA', 10);
+select * from depart;
+/*   DEPT_NO DNOMBRE        LOC
+---------- -------------- --------------
+        10 CONTABILIDAD   SEVILLA
+        20 INVESTIGACION  MADRID
+        30 VENTAS         BARCELONA
+        40 PRODUCCION     BILBAO
+        50 DESARROLLO     SEVILLA*/
+
+update departam set loc = 'SALAMANCA'
+    where dept_no = 50;
+select * from depart;
+/*   DEPT_NO DNOMBRE        LOC
+---------- -------------- --------------
+        10 CONTABILIDAD   SEVILLA
+        20 INVESTIGACION  MADRID
+        30 VENTAS         BARCELONA
+        40 PRODUCCION     BILBAO
+        50 DESARROLLO     SALAMANCA*/
+
+delete from departam 
+    where dept_no = 50;
+select * from depart;
+/*   DEPT_NO DNOMBRE        LOC
+---------- -------------- --------------
+        10 CONTABILIDAD   SEVILLA
+        20 INVESTIGACION  MADRID
+        30 VENTAS         BARCELONA
+        40 PRODUCCION     BILBAO*/
 
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
 
 
 
 
 
-drop trigger supere_cinco;
+drop trigger auditar_emple;
 
 
 
