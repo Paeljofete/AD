@@ -387,15 +387,238 @@ select * from depart;
         40 PRODUCCION     BILBAO*/
 
 ----------------------------------------------------------------------------------
+
+/*Escribe un paquete para gestionar los departamentos. Se llamará gest_depart e incluirá, al menos, los
+siguientes subprogramas:
+    – insertar_nuevo_depart: inserta un departamento nuevo. Recibe el nombre y la localidad del nuevo
+    departamento. Creará el nuevo departamento comprobando que el nombre no se duplique y le asignará
+    como número de departamento la decena siguiente al último número de departamento utilizado.
+    – borrar_depart: borra un departamento. Recibirá dos números de departamento: el primero corresponde
+    al departamento que queremos borrar y el segundo, al departamento al que pasarán los empleados del departamento
+    que se va a eliminar. El procedimiento se encargará de realizar los cambios oportunos en los
+    números de departamento de los empleados correspondientes.
+    – modificar_loc_depart: modifica la localidad del departamento. Recibirá el número del departamento
+    que se modifica y la nueva localidad, y realizará el cambio solicitado.
+    – visualizar_datos_depart: visualizará los datos de un departamento cuyo número se pasará en la llamada.
+    Además de los datos relativos al departamento, se visualizará el número de empleados que pertenecen
+    actualmente al departamento.
+    – visualizar_datos_depart: versión sobrecargada del procedimiento anterior que, en lugar del número del
+    departamento, recibirá el nombre del departamento. Realizará una llamada a la función buscar_depart_
+    por_nombre que se indica en el apartado siguiente.
+    – buscar_depart_por_nombre: función local al paquete. Recibe el nombre de un departamento y
+    devuelve el número del mismo.*/
+create or replace package gest_depart 
+as   
+    procedure insertar_nuevo_depart
+        (p_dnombre depart.dnombre%type,
+        p_loc depart.loc%type);
+    
+    procedure borrar_depart
+        (p_dept_borrar depart.dept_no%type,
+        p_dept_guarda depart.dept_no%type);
+
+    procedure modificar_loc_depart
+        (p_dept_no depart.dept_no%type,
+        p_loc depart.loc%type);
+    
+    procedure visualizar_datos_depart
+        (p_dept_no depart.dept_no%type);
+
+    procedure visualizar_datos_depart
+        (p_dnombre depart.dnombre%type);
+end;
+
+create or replace package body gest_depart 
+as
+    function buscar_depart_por_nombre
+        (p_dnombre depart.dnombre%type)
+        return depart.dept_no%type;
+    
+    procedure insertar_nuevo_depart(
+        p_dnombre depart.dnombre%type,
+        p_loc depart.loc%type)
+    as 
+        nombre_repetido exception;
+        v_dnombre depart.dnombre%type;
+        v_encontrado number default 0;
+        v_dept_no depart.dept_no%type;
+        v_vacio exception;
+    begin 
+        declare          
+        begin 
+            select dnombre, count(dnombre) into v_dnombre, v_encontrado from depart
+                where dnombre = p_dnombre
+                group by dnombre;
+
+            if v_encontrado = 1 then 
+                raise nombre_repetido;
+            end if;
+        exception            
+            when no_data_found then 
+                null;
+        end;
+
+        select max(dept_no) into v_dept_no from depart;
+
+        if v_dept_no is null then 
+            raise v_vacio;
+        end if;
+
+        insert into depart 
+            values((trunc(v_dept_no, -1) + 10), p_dnombre, p_loc);
+        
+        dbms_output.put_line('Departamento incluido.');
+    exception            
+        when v_vacio then 
+            insert into depart 
+                values(10, p_dnombre, p_loc);
+            dbms_output.put_line('Departamento incluido.');
+        when nombre_repetido then 
+            dbms_output.put_line('Error. El nombre del departamento ya existe.');
+    end;
+
+    procedure borrar_depart(
+        p_dept_borrar depart.dept_no%type,
+        p_dept_guarda depart.dept_no%type)
+    as 
+        v_dept_no depart.dept_no%type;
+    begin 
+        select dept_no into v_dept_no from depart
+            where dept_no = p_dept_borrar;
+
+        select dept_no into v_dept_no from depart
+            where dept_no = p_dept_guarda;
+
+        update emple set dept_no = p_dept_guarda
+            where dept_no = p_dept_borrar;
+
+        delete from depart 
+            where dept_no = p_dept_borrar;
+
+        dbms_output.put_line('Empleados cambiados al departamento ' || p_dept_guarda || '. Borrado el departamento ' || p_dept_borrar || '.');
+    exception
+        when no_data_found then 
+            dbms_output.put_line('Error. No existe el departamento.');
+    end;
+
+    procedure modificar_loc_depart(
+        p_dept_no depart.dept_no%type,
+        p_loc depart.loc%type)
+    as 
+        v_dept_no depart.dept_no%type;
+    begin 
+        select dept_no into v_dept_no from depart
+            where dept_no = p_dept_no;
+
+        update depart set loc = p_loc 
+            where dept_no = p_dept_no;
+        
+        dbms_output.put_line('Departamento cambiado de localidad.');
+    exception 
+        when no_data_found then 
+            dbms_output.put_line('Error. El departamento no existe.');
+    end;
+
+    procedure visualizar_datos_depart
+        (p_dept_no depart.dept_no%type)
+    as 
+        v_dept depart%rowtype;
+        v_emp_no emple.emp_no%type;
+    begin 
+        select * into v_dept from depart 
+            where dept_no = p_dept_no;
+        
+        select count(*) into v_emp_no from emple 
+            where dept_no = p_dept_no;
+        
+        dbms_output.put_line('Departamento: ' || v_dept.dept_no || ' - ' || v_dept.dnombre || ' - ' || v_dept.loc || '. Número empleados: ' || v_emp_no || '.');
+    exception 
+        when no_data_found then 
+            dbms_output.put_line('Error. El departamento no existe.');
+    end;
+
+    procedure visualizar_datos_depart
+        (p_dnombre depart.dnombre%type)
+    as 
+        v_dept depart%rowtype;
+        v_emp_no emple.emp_no%type;
+        v_dept_no depart.dept_no%type;
+        no_existe exception;
+    begin 
+        v_dept_no := buscar_depart_por_nombre(p_dnombre);
+
+        select * into v_dept from depart 
+            where dept_no = v_dept_no;
+        
+        select count(*) into v_emp_no from emple 
+            where dept_no = v_dept_no;
+        
+        dbms_output.put_line('Departamento: ' || v_dept.dept_no || ' - ' || v_dept.dnombre || ' - ' || v_dept.loc || '. Número empleados: ' || v_emp_no || '.');
+    end; 
+
+    function buscar_depart_por_nombre
+        (p_dnombre depart.dnombre%type)
+        return depart.dept_no%type
+    as 
+        v_dept_no depart.dept_no%type;
+    begin 
+        select dept_no into v_dept_no from depart 
+            where dnombre = p_dnombre;
+        return v_dept_no;
+    end;
+end;
+
+execute gest_depart.insertar_nuevo_depart('CONTABILIDAD', 'MURCIA');
+/*Error. El nombre del departamento ya existe.*/
+execute gest_depart.insertar_nuevo_depart('DESARROLLO', 'MURCIA');
+/*Departamento incluido.*/
+
+execute gest_depart.borrar_depart(10, 40);
+/*Empleados cambiados al departamento 40. Borrado el departamento 10.*/
+execute gest_depart.borrar_depart(40, 10);
+/*Error. No existe el departamento.*/
+execute gest_depart.borrar_depart(50, 20);
+/*Error. No existe el departamento.*/
+
+execute gest_depart.modificar_loc_depart(10, 'MURCIA');
+/*Departamento cambiado de localidad.*/
+execute gest_depart.modificar_loc_depart(50, 'MURCIA');
+/*Error. El departamento no existe.*/
+
+execute gest_depart.visualizar_datos_depart(10);
+/*Departamento: 10 - CONTABILIDAD - SEVILLA. Número empleados: 3.*/
+execute gest_depart.visualizar_datos_depart(50);
+/*Error. El departamento no existe.*/
+
+execute gest_depart.visualizar_datos_depart('CONTABILIDAD');
+/*Departamento: 10 - CONTABILIDAD - SEVILLA. Número empleados: 3.*/
+
 ----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
 
+/*Escribir un paquete completo para gestionar los empleados.
 
+El paquete se llamará gest_emple e incluirá, al menos los siguientes subprogramas:
 
+    -insertar_nuevo_emple
+    -borrar_emple: Cuando se borra un empleado todos los empleados que
+    dependían de él pasarán a depender del director del empleado borrado.
+    -modificar_oficio_emple
+    -modificar_dept_emple
+    -modificar_dir_emple
+    -modificar_salario_emple
+    -modificar_comision_emple
+    -visualizar_datos_emple: También se incluirá una versión sobrecargada del
+    procedimiento que recibirá el apellido del empleado.
+    -buscar_emple_por_apellido. Función local que recibe el apellido y devuelve
+    el número.
 
+Todos los procedimientos recibirán el número del empleado seguido de los demás
+datos necesarios.
+También se incluirá en el paquete un cursor, que será utilizado en los
+siguientes procedimientos que afectarán a todos los empleados:
 
-drop trigger auditar_emple;
-
-
-
+    -subida_salario_pct: incrementará el salario de todos los empleados el
+    porcentaje indicado en la llamada que no podrá ser superior al 25%.
+    -subida_salario_imp: sumará al salario de todos los empleados el importe
+    indicado en la llamada. Antes de proceder a incrementar los salarios se
+    comprobará que el importe indicado no supera el 25% del salario medio.*/
