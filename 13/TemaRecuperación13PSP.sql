@@ -622,3 +622,411 @@ siguientes procedimientos que afectarán a todos los empleados:
     -subida_salario_imp: sumará al salario de todos los empleados el importe
     indicado en la llamada. Antes de proceder a incrementar los salarios se
     comprobará que el importe indicado no supera el 25% del salario medio.*/
+create or replace package gest_emple 
+as   
+    function buscar_emple_por_apellido
+        (p_apellido emple.apellido%type)
+        return emple.emp_no%type;
+
+    procedure insertar_nuevo_emple
+        (p_emp_no emple.emp_no%type,
+        p_apellido emple.apellido%type,
+        p_oficio emple.oficio%type,
+        p_fecha emple.fecha_alt%type,
+        p_salario emple.salario%type,
+        p_comision emple.comision%type,
+        p_dept_no depart.dept_no%type);
+
+    procedure borrar_emple
+        (p_emple_borrar emple.emp_no%type);
+
+    procedure modificar_oficio_emple
+        (p_oficio emple.oficio%type,
+        p_emp_no emple.emp_no%type);
+    
+    procedure modificar_dept_emple
+        (p_dept_no depart.dept_no%type,
+        p_emp_no emple.emp_no%type);
+
+    procedure modificar_dir_emple   
+        (p_dir emple.dir%type,
+        p_emp_no emple.emp_no%type);
+
+    procedure modificar_salario_emple
+        (p_salario emple.salario%type,
+        p_emp_no emple.emp_no%type);
+    
+    procedure modificar_comision_emple
+        (p_comision emple.comision%type,
+        p_emp_no emple.emp_no%type);
+
+    procedure visualizar_datos_emple
+        (p_emp_no emple.emp_no%type);
+
+    procedure visualizar_datos_emple
+        (p_apellido emple.apellido%type);
+    
+    procedure subida_salario_pct
+        (p_porcentaje number);
+    
+    procedure subida_salario_imp
+        (p_importe number);
+end;
+
+create or replace package body gest_emple 
+as
+    cursor c1 is 
+        select emp_no from emple;
+        
+    procedure insertar_nuevo_emple
+        (p_emp_no emple.emp_no%type,
+        p_apellido emple.apellido%type,
+        p_oficio emple.oficio%type,
+        p_fecha emple.fecha_alt%type,
+        p_salario emple.salario%type,
+        p_comision emple.comision%type,
+        p_dept_no depart.dept_no%type)
+    as 
+        v_dept_no depart.dept_no%type;
+        v_contador number default 0;
+        v_dir emple.dir%type;
+        v_oficio emple.oficio%type;
+        no_existe exception;
+    begin   
+        select count(dept_no) into v_contador from depart
+            where dept_no = p_dept_no;
+
+        if v_contador = 0 then 
+            raise no_existe;
+        end if;  
+
+        select dir, depart.dept_no, oficio into v_dir, v_dept_no, v_oficio from emple, depart
+            where depart.dept_no = v_dept_no
+            and emple.dept_no = depart.dept_no
+            and oficio = 'DIRECTOR'
+            group by dir, depart.dept_no, oficio;    
+
+        insert into emple 
+            values(p_emp_no, p_apellido, p_oficio, v_dir, p_fecha, p_salario, p_comision, v_dept_no);   
+        dbms_output.put_line('Empleado/a incluido/a.');
+    exception  
+        when  no_data_found then 
+            insert into emple 
+                values(p_emp_no, p_apellido, 'DIRECTOR', p_emp_no, p_fecha, p_salario, p_comision, p_dept_no);
+            dbms_output.put_line('Empleado/a incluido/a.');
+        when no_existe then 
+            dbms_output.put_line('Error. El departamento no existe.');
+    end;
+
+    procedure borrar_emple
+        (p_emple_borrar emple.emp_no%type)
+    as 
+        v_emp_no emple.emp_no%type;
+        v_dir emple.dir%type;
+
+        cursor c1 is 
+            select emp_no from emple 
+                where dir = p_emple_borrar;
+    begin   
+        select dir into v_dir from emple 
+            where emp_no = p_emple_borrar;
+
+        for v1 in c1 loop 
+            update emple set dir = v_dir 
+                where emp_no = v1.emp_no;
+        end loop;
+
+        delete from emple   
+            where emp_no = p_emple_borrar;
+
+        dbms_output.put_line('Borrado ralizado.');
+    exception
+        when no_data_found then 
+            dbms_output.put_line('Error. No existe el empleado.');
+    end; 
+
+    procedure modificar_oficio_emple
+        (p_oficio emple.oficio%type,
+        p_emp_no emple.emp_no%type)
+    as 
+        no_existe exception;
+        v_emp_no emple.emp_no%type;
+        v_oficio emple.oficio%type;
+    begin 
+        select emp_no into v_emp_no from emple
+            where emp_no = p_emp_no;
+            
+        select distinct oficio into v_oficio from emple 
+            where oficio = p_oficio;
+
+        update emple set oficio = p_oficio 
+            where emp_no = p_emp_no; 
+        dbms_output.put_line('Cambio de oficio realizado.');
+    exception 
+        when no_data_found then 
+            dbms_output.put_line('Error. No se encuentra el dato.');      
+    end;
+
+    procedure modificar_dept_emple
+        (p_dept_no depart.dept_no%type,
+        p_emp_no emple.emp_no%type)
+    as 
+        v_dept_no depart.dept_no%type;
+        v_emp_no emple.emp_no%type;
+    begin 
+        select dept_no into v_dept_no from depart 
+            where dept_no = p_dept_no;
+
+        select emp_no into v_emp_no from emple 
+            where emp_no = p_emp_no;
+
+        update emple set dept_no = p_dept_no 
+            where emp_no = p_emp_no;
+        dbms_output.put_line('Cambio de departamento realizado.');
+    exception 
+        when no_data_found then   
+            dbms_output.put_line('Error. No se encuentra el dato.'); 
+    end;
+
+    procedure modificar_dir_emple   
+        (p_dir emple.dir%type,
+        p_emp_no emple.emp_no%type)
+    as 
+        v_dir emple.dir%type;
+        v_emp_no emple.emp_no%type;
+    begin 
+        select dir into v_dir from emple 
+            where dir = p_dir;
+
+        select emp_no into v_emp_no from emple 
+            where emp_no = p_emp_no;
+
+        update emple set dir = p_dir 
+            where emp_no = p_emp_no;
+        dbms_output.put_line('Cambio de director realizado.');
+    exception 
+        when no_data_found then   
+            dbms_output.put_line('Error. No se encuentra el dato.'); 
+    end;
+
+    procedure modificar_salario_emple
+        (p_salario emple.salario%type,
+        p_emp_no emple.emp_no%type)
+    as 
+        v_emp_no emple.emp_no%type;
+    begin
+        select emp_no into v_emp_no from emple 
+            where emp_no = p_emp_no;
+
+        update emple set salario = p_salario 
+            where emp_no = p_emp_no;
+        dbms_output.put_line('Cambio de salario realizado.');
+    exception 
+        when no_data_found then   
+            dbms_output.put_line('Error. No se encuentra el empleado.'); 
+    end;
+
+    procedure modificar_comision_emple
+        (p_comision emple.comision%type,
+        p_emp_no emple.emp_no%type)
+    as 
+        v_emp_no emple.emp_no%type;
+    begin
+        select emp_no into v_emp_no from emple 
+            where emp_no = p_emp_no;
+
+        update emple set comision = p_comision
+            where emp_no = p_emp_no;
+        dbms_output.put_line('Cambio de comisión realizado.');
+    exception 
+        when no_data_found then   
+            dbms_output.put_line('Error. No se encuentra el empleado.'); 
+    end;
+
+    procedure visualizar_datos_emple
+        (p_emp_no emple.emp_no%type)
+    as 
+        v_emple emple%rowtype;
+    begin 
+        select * into v_emple from emple 
+            where emp_no = p_emp_no;
+        
+        dbms_output.put_line('Empleada/o: ' || v_emple.emp_no || ' - ' || v_emple.apellido || ' - ' || v_emple.oficio || '.');
+        dbms_output.put_line(chr(9) || 'Director/a: ' || v_emple.dir || '.' || chr(10) || chr(9) || 'Departamento: ' || v_emple.dept_no || '.' || chr(10) || chr(9) || 'Fecha alta: ' || v_emple.fecha_alt || '.'
+            || chr(10) || chr(9) || 'Salario: ' || v_emple.salario || '.' || chr(10) || chr(9) || 'Comisión: ' || v_emple.comision || '.');
+    exception   
+        when no_data_found then 
+            dbms_output.put_line('Error. Empleada/o no registrada/o.');
+    end;
+
+    procedure visualizar_datos_emple
+        (p_apellido emple.apellido%type)
+    as 
+        v_emple emple%rowtype;
+        v_emp_no emple.emp_no%type;
+    begin 
+        select emp_no into v_emp_no from emple 
+            where apellido = p_apellido;
+
+        select * into v_emple from emple 
+            where emp_no = v_emp_no;
+        
+        dbms_output.put_line('Empleada/o: ' || v_emple.emp_no || ' - ' || v_emple.apellido || ' - ' || v_emple.oficio || '.');
+        dbms_output.put_line(chr(9) || 'Director/a: ' || v_emple.dir || '.' || chr(10) || chr(9) || 'Departamento: ' || v_emple.dept_no || '.' || chr(10) || chr(9) || 'Fecha alta: ' || v_emple.fecha_alt || '.'
+            || chr(10) || chr(9) || 'Salario: ' || v_emple.salario || '.' || chr(10) || chr(9) || 'Comisión: ' || v_emple.comision || '.');
+    exception   
+        when no_data_found then 
+            dbms_output.put_line('Error. Empleada/o no registrada/o.');
+    end;
+
+    function buscar_emple_por_apellido
+        (p_apellido emple.apellido%type)
+        return emple.emp_no%type
+    as 
+        v_emp_no emple.emp_no%type;
+    begin 
+        select emp_no into v_emp_no from emple 
+            where apellido = p_apellido;
+        return v_emp_no;
+    end;
+
+    procedure subida_salario_pct
+        (p_porcentaje number)
+    as 
+        mayor_porcentaje exception;
+    begin 
+        for v1 in c1 loop 
+            if p_porcentaje <= 25 then 
+                update emple set salario = salario + ((salario * p_porcentaje) / 100) 
+                    where emp_no = v1.emp_no;
+            else    
+                raise mayor_porcentaje;
+            end if;
+        end loop;
+
+        dbms_output.put_line('Sueldo actualizado.');
+    exception
+        when mayor_porcentaje then 
+            dbms_output.put_line('El porcentaje de subida no puede ser superior al 25%.');
+    end;
+
+    procedure subida_salario_imp
+        (p_importe number)
+    as 
+        v_media_salario number (9,2);
+        mayor_porcentaje exception;
+    begin 
+        select avg(salario) into v_media_salario from emple;
+
+        v_media_salario := (v_media_salario * 25) /100;
+
+        for v1 in c1 loop 
+            if p_importe <= v_media_salario then 
+                update emple set salario = salario + p_importe
+                    where emp_no = v1.emp_no; 
+            else
+                raise mayor_porcentaje;
+            end if;
+        end loop;
+
+        dbms_output.put_line('Sueldo actualizado.');
+    exception
+        when mayor_porcentaje then 
+            dbms_output.put_line('El porcentaje de subida no puede ser superior a ' || v_media_salario || '.');
+    end; 
+end;
+
+execute gest_emple.insertar_nuevo_emple(1000, 'TENA', 'EMPLEADO', sysdate, 2500, 50, 10);
+/*Empleado/a incluido/a.*/
+rollback;
+execute gest_emple.insertar_nuevo_emple(1000, 'TENA', 'EMPLEADO', sysdate, 2500, 50, 50);
+/*Error. El departamento no existe.*/
+rollback;
+execute gest_emple.insertar_nuevo_emple(1000, 'TENA', 'EMPLEADO', sysdate, 2500, 50, 40);
+/*Empleado/a incluido/a.*/
+
+execute gest_emple.borrar_emple(7369);
+/*Borrado ralizado.*/
+rollback;
+execute gest_emple.borrar_emple(7698);
+/*Borrado ralizado.*/
+rollback;
+
+execute gest_emple.modificar_oficio_emple('DIRECTOR', 7369);
+/*Cambio de oficio realizado.*/
+rollback;
+execute gest_emple.modificar_oficio_emple('DEV', 7369);
+/*Error. No se encuentra el dato.*/
+execute gest_emple.modificar_oficio_emple('DIRECTOR', 1000);
+/*Error. No se encuentra el dato.*/
+
+execute gest_emple.modificar_dept_emple(40, 7369);
+/*Cambio de departamento realizado.*/
+rollback;
+execute gest_emple.modificar_dept_emple(50, 7369);
+/*Error. No se encuentra el dato.*/
+execute gest_emple.modificar_dept_emple(40, 1000);
+/*Error. No se encuentra el dato.*/
+
+execute gest_emple.modificar_dir_emple(7782, 7369);
+/*Cambio de director realizado.*/
+rollback;
+execute gest_emple.modificar_dir_emple(7369, 7499);
+/*Error. No se encuentra el dato.*/
+execute gest_emple.modificar_dir_emple(7782, 1000);
+/*Error. No se encuentra el dato.*/
+execute gest_emple.modificar_dir_emple(1000, 7369);
+/*Error. No se encuentra el dato.*/
+
+execute gest_emple.modificar_salario_emple(2500, 7369);
+/*Cambio de salario realizado.*/
+rollback;
+execute gest_emple.modificar_salario_emple(2500, 1000);
+/*Error. No se encuentra el empleado.*/
+
+execute gest_emple.modificar_comision_emple(250, 7369);
+/*Cambio de comisión realizado.*/
+rollback;
+execute gest_emple.modificar_comision_emple(250, 1000);
+/*Error. No se encuentra el empleado.*/
+
+execute gest_emple.visualizar_datos_emple(7654);
+/*Empleada/o: 7654 - MARTIN - VENDEDOR.
+	Director/a: 7698.
+	Departamento: 30.
+	Fecha alta: 29/09/91.
+	Salario: 1600.
+	Comisión: 1020.*/
+execute gest_emple.visualizar_datos_emple(1000);
+/*Error. Empleada/o no registrada/o.*/
+
+execute gest_emple.visualizar_datos_emple('FERNANDEZ');
+/*Empleada/o: 7902 - FERNANDEZ - ANALISTA.
+	Director/a: 7566.
+	Departamento: 20.
+	Fecha alta: 03/12/91.
+	Salario: 3000.
+	Comisión: .*/
+execute gest_emple.visualizar_datos_emple('TENA');
+/*Error. Empleada/o no registrada/o.*/
+
+select gest_emple.buscar_emple_por_apellido('FERNANDEZ') from dual;
+/*GEST_EMPLE.BUSCAR_EMPLE_POR_APELLIDO('FERNANDEZ')
+-------------------------------------------------
+                                             7902*/
+
+execute gest_emple.subida_salario_pct(25);
+/*Sueldo actualizado.*/
+execute gest_emple.subida_salario_pct(28);
+/*El porcentaje de subida no puede ser superior al 25%.*/
+
+execute gest_emple.subida_salario_imp(250);
+/*Sueldo actualizado.*/
+execute gest_emple.subida_salario_imp(544);
+/*El porcentaje de subida no puede ser superior a 543,93.*/
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
