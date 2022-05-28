@@ -1024,9 +1024,413 @@ execute gest_emple.subida_salario_imp(250);
 /*Sueldo actualizado.*/
 execute gest_emple.subida_salario_imp(544);
 /*El porcentaje de subida no puede ser superior a 543,93.*/
+
+----------------------------------------------------------------------------------
+
+-- BOLETÍN 4.
+
+/*1.- Crear un trigger que simule un borrado en cascada, de modo que al
+borrar un departamento, borre todos los empleados de ese
+departamento.*/
+create or replace trigger borraDepart 
+    before delete on depart for each row 
+begin 
+    delete from emple 
+        where emple.dept_no = :old.dept_no;
+    
+    dbms_output.put_line('Se ha borrado el departamento ' || :old.dept_no || ' y los empleados asociados al mismo.');
+end;
+
+delete depart 
+    where dept_no = 10;
+/*Se ha borrado el departamento 10 y los empleados asociados al mismo.*/
+
+----------------------------------------------------------------------------------
+
+/*2.- Crear un trigger que simule una modificación en cascada, de modo
+que al modificar un departamento, actualice su valor para todos sus
+empleados.*/
+create or replace trigger modificaDepart 
+    before update of dept_no on depart for each row 
+begin 
+    update emple set dept_no = :new.dept_no 
+        where dept_no = :old.dept_no;
+    
+    dbms_output.put_line('Se ha modificado el número del departamento ' || :old.dept_no || ' que ahora es: ' 
+        || :new.dept_no || '. A los empleados también se les ha actualizado el departamento.');
+end;
+
+update depart set dept_no = 50 
+    where dept_no = 10;
+/*Se ha modificado el número del departamento 10 que ahora es: 50. A los empleados también se les ha actualizado el departamento.*/
+
+----------------------------------------------------------------------------------
+
+/*3.- Crear un trigger que impida que un empleado pertenezca a un
+departamento inexistente.*/
+create or replace trigger DepartInex 
+    before update of dept_no or insert on emple for each row 
+declare 
+    v_comprueba depart.dept_no%type;
+begin 
+    select dept_no into v_comprueba from depart 
+        where dept_no = :new.dept_no;
+exception 
+    when no_data_found then 
+        raise_application_error(-20500, 'Error. No existe el departamento.');
+end;
+
+update emple set dept_no = 50
+    where dept_no = 10;
+/*ORA-20500: Error. No existe el departamento.*/
+
+update emple set dept_no = 20 
+    where dept_no = 10;
+/*1 fila actualizada.*/
+
+----------------------------------------------------------------------------------
+
+/*4.- Crear un trigger para impedir que se aumente el salario de un
+empleado en más de un 20%.*/
+create or replace trigger salario20 
+    before update of salario on emple for each row 
+begin 
+    if :new.salario > :old.salario * 1.2 then 
+        raise_application_error(-20000, 'Error. No es posible aumentar el salario más del 20%.');
+    end if;
+end;
+
+update emple set salario = 1250
+    where emp_no = 7369;
+/*ORA-20000: Error. No es posible aumentar el salario más del 20%.*/
+update emple set salario = 1100
+    where emp_no = 7369;
+/*1 fila actualizada.*/
+
+----------------------------------------------------------------------------------
+
+/*5.- Escribir un disparador de base de datos que haga fallar cualquier
+operación de modificación del apellido o del número de un empleado, o
+que suponga una subida de sueldo superior al 20%.*/
+create or replace trigger modificaEmple 
+    before update of apellido, emp_no, salario on emple for each row 
+begin 
+    if updating('APELLIDO') then 
+        raise_application_error(-20000, 'Error. No es posible cambiar el apellido.');
+    elsif updating('EMP_NO') then 
+        raise_application_error(-20000, 'Error. No es posible cambiar el número de empleada/o.');
+    elsif :new.salario > :old.salario * 1.2 then 
+        raise_application_error(-20000, 'Error. No es posible aumentar el salario más del 20%.');
+    end if;
+end; 
+
+update emple set apellido = 'TENA'
+    where emp_no = 7369;
+/*ORA-20000: Error. No es posible cambiar el apellido.*/
+update emple set emp_no = 1000 
+    where emp_no = 7369;
+/*ORA-20000: Error. No es posible cambiar el número de empleada/o.*/
+update emple set salario = 1250
+    where emp_no = 7369;
+/*ORA-20000: Error. No es posible aumentar el salario más del 20%.*/
+
+----------------------------------------------------------------------------------
+
+/*6.- Crear un trigger que garantice que la comisión de los nuevos
+empleados sea del 1% de su salario.*/
+create or replace trigger comision1 
+    before insert on emple for each row 
+begin 
+    if :new.comision < :new.salario * 0.01 then 
+        :new.comision := :new.salario * 0.01;
+
+        dbms_output.put_line('Se va a actualizar la comisión para que sea el 1% del salario.');
+    else 
+        :new.comision := :new.comision;
+
+        dbms_output.put_line('Empleada/o insertada/o');
+    end if;
+end;
+
+insert into emple 
+    values(1000, 'TENA', 'ANALISTA', 7839, sysdate, 2000, 10, 20);
+/*Se va a actualizar la comisión  para que sea el 1% del salario.*/
+select * from emple      
+/*1000 TENA       ANALISTA         7839 28/05/22       2000         20         20*/
+rollback;
+insert into emple 
+    values(1000, 'TENA', 'ANALISTA', 7839, sysdate, 2000, 30, 20);
+/*Empleada/o insertada/o*/
+select * from emple
+/*1000 TENA       ANALISTA         7839 28/05/22       2000         30         20*/
+
+----------------------------------------------------------------------------------
+
+/*7.- Dadas las tablas Centros, Personal y Profesores, crear un trigger
+que al insertar o borrar un profesor en la tabla Personal mantenga
+actualizada la tabla Profesores.*/
+create or replace trigger actualizadaProfesores
+    before insert or delete on personal for each row
+begin 
+    if inserting then 
+        if :new.funcion = 'PROFESOR' then 
+            insert into profesores 
+                values(:new.cod_centro, :new.dni, :new.apellidos, null);
+            dbms_output.put_line('Se ha añadido en la tabla profesores también.');
+        end if;
+    elsif deleting then 
+        if :old.funcion = 'PROFESOR' then 
+            delete from profesores where dni = :old.dni;
+            dbms_output.put_line('Se ha eliminado de la tabla profesores.');
+        end if;
+    end if;
+end;
+
+insert into personal 
+    values(22, 2456897, 'Fernández Tena, Jose', 'PROFESOR', 200000);
+/*Se ha añadido en la tabla profesores también.*/
+rollback;
+insert into personal 
+    values(22, 2456897, 'Fernández Tena, Jose', 'ADMINISTRATIVO', 200000);
+/*1 fila creada.*/
+rollback;
+delete personal 
+    where dni = 1112345;
+/*Se ha eliminado de la tabla profesores.*/    
+delete personal 
+    where dni = 4480099;
+/*1 fila borrada.
+
+----------------------------------------------------------------------------------
+
+/*8.- Diseñar un trigger que mantenga actualizado el contenido de la
+tabla estadísticas.
+LIBROS(isbn,genero,titulo,autor);
+ESTADISTICAS(genero,total_libros)*/
+create table libros1
+(
+    isbn number(4),
+    genero varchar2(20),
+    titulo varchar2(30),
+    autor varchar2(20)
+);
+
+create table estadisticas 
+(
+    genero varchar2(20),
+    total_libros number(5)
+);
+
+create or replace trigger actualizaEstadisticas 
+    after insert or update of genero or delete on libros1 for each row 
+begin 
+    if inserting then 
+        update estadisticas set total_libros = total_libros + 1 
+            where genero = :new.genero;
+        dbms_output.put_line('Se ha añadido también en la tabla estadísticas.');
+    elsif updating('GENERO') then 
+        update estadisticas set total_libros = total_libros + 1 
+            where genero = :new.genero;
+        update estadisticas set total_libros = total_libros - 1 
+            where genero = :old.genero;
+        dbms_output.put_line('Se ha modificado también en la tabla estadísticas.');
+    elsif deleting then 
+        update estadisticas set total_libros = total_libros - 1 
+            where genero = :old.genero;
+        dbms_output.put_line('Se ha borrado también en la tabla estadísticas.');
+    end if;
+end;
+        
+insert into libros1
+    values(1234, 'Aventuras', 'El Señor de los Anillos', 'JRR Tolkien');
+/*Se ha añadido también en la tabla estadísticas.*/
+update libros1 set genero = 'Fantasía'
+    where isbn = 1234;
+/*Se ha modificado también en la tabla estadísticas.*/
+delete from libros1
+    where isbn = 1234;
+/*Se ha borrado también en la tabla estadísticas.*/
+
+----------------------------------------------------------------------------------
+
+-- BOLETÍN 5.
+
+/*1.- Crear un trigger para impedir que ningún departamento tenga más de 7
+empleados.*/
+create or replace trigger depart7
+    after insert or update on emple
+declare 
+    cursor c1 is 
+        select count(emp_no) contador, dept_no from emple 
+            group by dept_no;
+begin 
+    for v1 in c1 loop 
+        if v1.contador > 7 then
+            raise_application_error(-20000, 'Error. No es posible más de 7 empleadas/os por departamento.');
+        end if;
+    end loop;
+end;
+
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 2000, 50, 30);
+/*1 fila creada.*/
+insert into emple 
+    values(1001, 'VERDÚ', 'VENDEDOR', 7698, sysdate, 2000, null, 30);   
+/*ORA-20000: Error. No es posible más de 7 empleadas/os por departamento.*/
+rollback;
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 2000, 50, 30);
+/*1 fila creada.*/
+update emple set dept_no = 30 
+    where emp_no = 7369;
+/*ORA-20000: Error. No es posible más de 7 empleadas/os por departamento.*/
+
+----------------------------------------------------------------------------------
+
+/*2.-Crear trigger para impedir que el salario total por departamento sea
+superior a 15000 euros.*/
+create or replace trigger salarioTotal
+    after insert or update on emple 
+declare 
+    cursor c1 is 
+        select sum(salario) salario_total, dept_no from emple 
+            group by dept_no;
+begin 
+    for v1 in c1 loop 
+        if v1.salario_total > 15000 then 
+            raise_application_error(-20000, 'Error. El salario del departamento no puede superar los 15000.');
+        end if;
+    end loop;
+end;
+
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 2000, 50, 20);
+/*1 fila creada.*/
+insert into emple 
+    values(1001, 'VERDÚ', 'VENDEDOR', 7698, sysdate, 3000, null, 20);
+/*ORA-20000: Error. El salario del departamento no puede superar los 15000.*/
+update emple set salario = 4000
+    where emp_no = 1000;
+/*ORA-20000: Error. El salario del departamento no puede superar los 15000.*/
+
+----------------------------------------------------------------------------------
+
+/*3.- Crear un trigger sobre la tabla empleados para que no se permita que
+un empleado sea jefe de más de cinco empleados.*/
+create or replace trigger jef5 
+    after insert or update on emple 
+declare 
+    cursor c1 is 
+        select count(emp_no) num_emple, dir from emple  
+            group by dir;
+begin 
+    for v1 in c1 loop 
+        if v1.num_emple > 5 then 
+            raise_application_error(-20000, 'Error. Máximo 5 empleadas/os por jefa/e.');
+        end if;
+    end loop;
+end;
+
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 2000, 50, 20);
+/*ORA-20000: Error. Máximo 5 empleadas/os por jefa/e.*/
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7566, sysdate, 2000, 50, 20);
+/*1 fila creada.*/
+update emple set dir = 7698 
+    where emp_no = 7369;
+/*ORA-20000: Error. Máximo 5 empleadas/os por jefa/e.*/
+
+----------------------------------------------------------------------------------
+
+/*4.-Crear un trigger para asegurar que ningún empleado pueda cobrar más
+que su jefe.*/
+create or replace trigger cobrarJef
+    after insert or update on emple 
+declare 
+    v_emp_no emple.emp_no%type;
+
+    cursor c1 is 
+        select emp_no, dir, salario from emple;
+
+    cursor c2 is    
+        select salario from emple 
+            where emp_no = v_emp_no;
+begin 
+    for v1 in c1 loop 
+        v_emp_no := v1.dir;
+    
+        for v2 in c2 loop 
+            if v1.salario > v2.salario then 
+                raise_application_error(-20000, 'Error. No es posible que empleada/o supere el salario de jefa/e.');
+            end if;
+        end loop;
+    end loop;
+end;
+
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 3006, 50, 20);
+/*ORA-20000: Error. No es posible que empleada/o supere el salario de jefa/e.*/
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 1000, 50, 20);
+/*1 fila creada.*/
+update emple set salario = 4000 
+    where emp_no = 7369;
+/*ORA-20000: Error. No es posible que empleada/o supere el salario de jefa/e.*/
+
+----------------------------------------------------------------------------------
+
+/*5.- Crear un trigger para impedir que un empleado y su jefe pertenezcan a
+departamentos distintos.*/
+create or replace trigger departDistint
+    after insert or update on emple 
+declare 
+    v_dir emple.dir%type;
+
+    cursor c1 is 
+        select * from emple;
+    
+    cursor c2 is    
+        select * from emple 
+            where emp_no = v_dir;
+begin 
+    for v1 in c1 loop 
+        v_dir := v1.dir;
+    
+        for v2 in c2 loop 
+            if v1.dept_no <> v2.dept_no then 
+                raise_application_error(-20000, 'Error. Empleada/o y jefa/e deben pertener al mismo departamento.');
+            end if;
+        end loop;
+    end loop;
+end;
+
+
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 3006, 50, 20);
+/*ORA-20000: Error. Empleada/o y jefa/e deben pertener al mismo departamento.*/
+insert into emple 
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 3006, 50, 30);
+/*1 fila creada.*/
+
+----------------------------------------------------------------------------------
+
+-- BOLETÍN 6.
+
+/*1.- Dada la vista Vnotas( Nombrealumno,NombreAsignatura,Nota), diseñar
+disparadores para:
+-Insertar una nueva nota.
+-Modificar la nota de un alumno
+-Borrar una nota.
+-Borrar todas las notas de un alumno.*/
+create view Vnotas as 
+    select apenom, nombre, nota from notas, alumnos, asignaturas
+        where notas.dni = alumnos.dni and notas.cod = asignaturas.cod
+        group by apenom, nombre, nota;
+
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
+
+drop trigger departDistint;
+
