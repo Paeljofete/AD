@@ -1,0 +1,6 @@
+set serveroutput on
+set linesize 150
+set pagesize 150
+set serveroutput on size 1000000
+
+select * from emple

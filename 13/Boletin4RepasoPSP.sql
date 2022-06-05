@@ -1,4 +1,4 @@
--- BOLETÍN 4 REPASO TRIGGERS.
+-- BOLETÍN 4 REPASO COLECCIONES Y PAQUETES.
 
 /*1. Crea un procedimiento que vuelque el contenido de Emple en un Varray y muestre su contenido.*/
 create or replace procedure varrayEmple 
