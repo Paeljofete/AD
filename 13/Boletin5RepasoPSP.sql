@@ -105,21 +105,20 @@ begin
         if v_salario > 15000 then 
             raise_application_error(-20000, 'Error. El salario del departamento no puede ser superior a 15000.');
         end if;
+		
+		n := salarioTotal.va_depart.next(n);
     end loop;
 end;
 
-
-
-
 insert into emple 
-    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 2000, 50, 20);
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 5000, 50, 20);
+/*ORA-20000: Error. El salario del departamento no puede ser superior a 15000.*/
+insert into emple 
+    values(1001, 'VERDÚ', 'VENDEDOR', 7698, sysdate, 2000, null, 20);
 /*1 fila creada.*/
-insert into emple 
-    values(1001, 'VERDÚ', 'VENDEDOR', 7698, sysdate, 3000, null, 20);
-/*ORA-20000: Error. El salario del departamento no puede superar los 15000.*/
-update emple set salario = 4000
-    where emp_no = 1000;
-/*ORA-20000: Error. El salario del departamento no puede superar los 15000.*/
+update emple set salario = 5000
+    where emp_no = 1001;
+/*ORA-20000: Error. El salario del departamento no puede ser superior a 15000.*/
 
 ----------------------------------------------------------------------------------
 
@@ -165,25 +164,20 @@ begin
         if v_dir > 5 then 
             raise_application_error(-20000, 'Error. Cada jefa/e puede tener como máximo 5 empleadas/os a cargo.');
         end if;
+		
+		n := max5Jef.va_emple.next(n);
     end loop;
 end;
 
-
-
-
-
-
 insert into emple 
-    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 2000, 50, 20);
-/*ORA-20000: Error. Máximo 5 empleadas/os por jefa/e.*/
-insert into emple 
-    values(1000, 'TENA', 'VENDEDOR', 7566, sysdate, 2000, 50, 20);
+    values(1000, 'TENA', 'VENDEDOR', 7839, sysdate, 2000, 50, 10);
 /*1 fila creada.*/
-update emple set dir = 7698 
+insert into emple 
+    values(1001, 'VERDÚ', 'VENDEDOR', 7698, sysdate, 2000, null, 10);
+/*ORA-20000: Error. Cada jefa/e puede tener como máximo 5 empleadas/os a cargo.*/
+update emple set dir = 7839 
     where emp_no = 7369;
-/*ORA-20000: Error. Máximo 5 empleadas/os por jefa/e.*/
-
-
+/*ORA-20000: Error. Cada jefa/e puede tener como máximo 5 empleadas/os a cargo.*/
 
 ----------------------------------------------------------------------------------
 
@@ -217,37 +211,35 @@ end;
 create or replace trigger controlaCobro 
     after insert or update on emple 
 declare 
-    v_cobro number;
+    v_emp_no emple.emp_no%type;
     n integer := 0;
+	
+	cursor c1 is 
+		select emp_no, dir, salario from emple;
+	
+	cursor c2 is 
+		select salario from emple 
+			where emp_no = v_emp_no;
 begin 
     n := cobraJef.va_emple.first;
 
     while cobraJef.va_emple.exists(n) loop 
-        select count(*) into v_cobro from emple e, emple f 
-            where e.dir = f.emp_no 
-            and e.salario = f.salario 
-            and cobraJef.va_emple(n).direct = e.dir;ç
-        
-        if v_cobro > 0 then 
-            raise_application_error(-20000, 'Error. Las/os empleadas/os no pueden cobrar más que su jefa/e.');
-        end if;
+		for v1 in c1 loop 
+			v_emp_no := v1.dir;
+			
+			for v2 in c2 loop 
+				if v1.salario > v2.salario then 
+					raise_application_error(-20000, 'Error. Las/os empleadas/os no pueden cobrar más que su jefa/e.');
+				end if;
+		    end loop;
+		end loop;
+		n := cobraJef.va_emple.next(n);
     end loop;
 end;
 
-
-
-
-
 insert into emple 
-    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 3006, 50, 20);
-/*ORA-20000: Error. No es posible que empleada/o supere el salario de jefa/e.*/
-insert into emple 
-    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 1000, 50, 20);
-/*1 fila creada.*/
-update emple set salario = 4000 
-    where emp_no = 7369;
-
-
+    values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 8000, 50, 20);
+/*ORA-20000: Error. Las/os empleadas/os no pueden cobrar más que su jefa/e.*/
 
 ----------------------------------------------------------------------------------
 
@@ -299,19 +291,14 @@ begin
         if v_dept <> v_dir then 
             raise_application_error(-20000, 'Error. Empleada/o y jefa/e no pueden pertenercer a departamentos diferentes.');
         end if;
+	
+		n := jefEmple.va_emple.next(n);
     end loop;
 end;
-    
-
-
 
 insert into emple 
     values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 3006, 50, 20);
-/*ORA-20000: Error. Empleada/o y jefa/e deben pertener al mismo departamento.*/
+/*ORA-20000: Error. Empleada/o y jefa/e no pueden pertenercer a departamentos diferentes.*/
 insert into emple 
     values(1000, 'TENA', 'VENDEDOR', 7698, sysdate, 3006, 50, 30);
 /*1 fila creada.*/
-
-
-
-drop package max7Emple
